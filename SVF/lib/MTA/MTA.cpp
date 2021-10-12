@@ -12,19 +12,24 @@
 #include "MTA/MTAStat.h"
 #include "WPA/Andersen.h"
 #include "MTA/FSMPTA.h"
-#include "Util/SVFUtil.h"
+#include "Util/AnalysisUtil.h"
 
-using namespace SVFUtil;
+#include <llvm/Support/CommandLine.h>	// for llvm command line options
+#include <llvm/IR/InstIterator.h>	// for inst iteration
 
-static llvm::RegisterPass<MTA> RACEDETECOR("pmhp", "May-Happen-in-Parallel Analysis");
+using namespace llvm;
+using namespace analysisUtil;
 
-static llvm::cl::opt<bool> AndersenAnno("tsan-ander", llvm::cl::init(false), llvm::cl::desc("Add TSan annotation according to Andersen"));
+static RegisterPass<MTA> RACEDETECTOR("pmhp", "May-Happen-in-Parallel Analysis");
 
-static llvm::cl::opt<bool> FSAnno("tsan-fs", llvm::cl::init(false), llvm::cl::desc("Add TSan annotation according to flow-sensitive analysis"));
+static cl::opt<bool> AndersenAnno("tsan-ander", cl::init(false), cl::desc("Add TSan annotation according to Andersen"));
 
+static cl::opt<bool> FSAnno("tsan-fs", cl::init(false), cl::desc("Add TSan annotation according to flow-sensitive analysis"));
+
+static cl::opt<u32_t> maxCxtLength("maxCxtLen", cl::init(10), cl::desc("set the max context length for context-sensitive analysis"));
 
 char MTA::ID = 0;
-ModulePass* MTA::modulePass = NULL;
+llvm::ModulePass* MTA::modulePass = NULL;
 MTA::FunToSEMap MTA::func2ScevMap;
 MTA::FunToLoopInfoMap MTA::func2LoopInfoMap;
 
@@ -167,9 +172,9 @@ void MTA::detect(SVFModule module) {
         // collect and create symbols inside the function body
         for (inst_iterator II = inst_begin(*F), E = inst_end(*F); II != E; ++II) {
             const Instruction *inst = &*II;
-            if (const LoadInst* load = SVFUtil::dyn_cast<LoadInst>(inst)) {
+            if (const LoadInst* load = dyn_cast<LoadInst>(inst)) {
                 loads.insert(load);
-            } else if (const StoreInst* store = SVFUtil::dyn_cast<StoreInst>(inst)) {
+            } else if (const StoreInst* store = dyn_cast<StoreInst>(inst)) {
                 stores.insert(store);
             }
         }

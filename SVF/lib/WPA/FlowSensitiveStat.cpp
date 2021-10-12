@@ -28,10 +28,11 @@
  */
 
 #include "WPA/WPAStat.h"
-#include "Util/SVFUtil.h"
+#include "Util/AnalysisUtil.h"
 #include "WPA/FlowSensitive.h"
 
-using namespace SVFUtil;
+using namespace llvm;
+using namespace analysisUtil;
 
 /*!
  * Clear statistics
@@ -78,7 +79,7 @@ void FlowSensitiveStat::clearStat()
  */
 void FlowSensitiveStat::performStat()
 {
-    assert(SVFUtil::isa<FlowSensitive>(fspta) && "not an flow-sensitive pta pass!! what else??");
+    assert(isa<FlowSensitive>(fspta) && "not an flow-sensitive pta pass!! what else??");
     endClk();
 
     clearStat();
@@ -100,7 +101,7 @@ void FlowSensitiveStat::performStat()
     for (PAG::const_iterator nodeIt = pag->begin(), nodeEit = pag->end(); nodeIt != nodeEit; nodeIt++) {
         NodeID nodeId = nodeIt->first;
         PAGNode* pagNode = nodeIt->second;
-        if(SVFUtil::isa<ObjPN>(pagNode)) {
+        if(isa<ObjPN>(pagNode)) {
             const MemObj * memObj = pag->getBaseObj(nodeId);
             SymID baseId = memObj->getSymId();
             if (nodeSet.insert(baseId).second) {
@@ -120,9 +121,9 @@ void FlowSensitiveStat::performStat()
     for (; svfgNodeIt != svfgNodeEit; ++svfgNodeIt) {
         numOfNode++;
         SVFGNode* svfgNode = svfgNodeIt->second;
-        if (SVFUtil::isa<CopySVFGNode>(svfgNode))
+        if (isa<CopySVFGNode>(svfgNode))
             numOfCopy++;
-        else if (SVFUtil::isa<StoreSVFGNode>(svfgNode))
+        else if (isa<StoreSVFGNode>(svfgNode))
             numOfStore++;
     }
 
@@ -246,8 +247,7 @@ void FlowSensitiveStat::performStat()
     timeStatMap["AverageSCCSize"] = (fspta->numOfSCC == 0) ? 0 :
                                     ((double)fspta->numOfNodesInSCC / fspta->numOfSCC);
 
-    std::cout << "\n****Flow-Sensitive Pointer Analysis Statistics****\n";
-    PTAStat::printStat();
+    printStat();
 }
 
 void FlowSensitiveStat::statNullPtr()
@@ -271,7 +271,7 @@ void FlowSensitiveStat::statNullPtr()
             if(pts.empty()) {
                 std::string str;
                 raw_string_ostream rawstr(str);
-                if (!SVFUtil::isa<DummyValPN>(pagNode) && !SVFUtil::isa<DummyObjPN>(pagNode)) {
+                if (!isa<DummyValPN>(pagNode) && !isa<DummyObjPN>(pagNode)) {
                     // if a pointer is in dead function, we do not care
                     if(isPtrInDeadFunction(pagNode->getValue()) == false) {
                         _NumOfNullPtr++;
@@ -339,19 +339,19 @@ void FlowSensitiveStat::statInOutPtsSize(const DFInOutMap& data, ENUM_INOUT inOr
         const SVFGNode* node = fspta->svfg->getSVFGNode(it->first);
 
         // Count number of SVFG nodes have IN/OUT set.
-        if (SVFUtil::isa<FormalINSVFGNode>(node))
+        if (isa<FormalINSVFGNode>(node))
             _NumOfFormalInSVFGNodesHaveInOut[inOrOut]++;
-        else if (SVFUtil::isa<FormalOUTSVFGNode>(node))
+        else if (isa<FormalOUTSVFGNode>(node))
             _NumOfFormalOutSVFGNodesHaveInOut[inOrOut]++;
-        else if (SVFUtil::isa<ActualINSVFGNode>(node))
+        else if (isa<ActualINSVFGNode>(node))
             _NumOfActualInSVFGNodesHaveInOut[inOrOut]++;
-        else if (SVFUtil::isa<ActualOUTSVFGNode>(node))
+        else if (isa<ActualOUTSVFGNode>(node))
             _NumOfActualOutSVFGNodesHaveInOut[inOrOut]++;
-        else if (SVFUtil::isa<LoadSVFGNode>(node))
+        else if (isa<LoadSVFGNode>(node))
             _NumOfLoadSVFGNodesHaveInOut[inOrOut]++;
-        else if (SVFUtil::isa<StoreSVFGNode>(node))
+        else if (isa<StoreSVFGNode>(node))
             _NumOfStoreSVFGNodesHaveInOut[inOrOut]++;
-        else if (SVFUtil::isa<MSSAPHISVFGNode>(node))
+        else if (isa<MSSAPHISVFGNode>(node))
             _NumOfMSSAPhiSVFGNodesHaveInOut[inOrOut]++;
         else
             assert(false && "unexpected node have IN/OUT set");
@@ -370,19 +370,19 @@ void FlowSensitiveStat::statInOutPtsSize(const DFInOutMap& data, ENUM_INOUT inOr
             // Only node with non-empty points-to set are counted.
             _NumOfVarHaveINOUTPts[inOrOut]++;
 
-            if (SVFUtil::isa<FormalINSVFGNode>(node))
+            if (isa<FormalINSVFGNode>(node))
                 _NumOfVarHaveINOUTPtsInFormalIn[inOrOut]++;
-            else if (SVFUtil::isa<FormalOUTSVFGNode>(node))
+            else if (isa<FormalOUTSVFGNode>(node))
                 _NumOfVarHaveINOUTPtsInFormalOut[inOrOut]++;
-            else if (SVFUtil::isa<ActualINSVFGNode>(node))
+            else if (isa<ActualINSVFGNode>(node))
                 _NumOfVarHaveINOUTPtsInActualIn[inOrOut]++;
-            else if (SVFUtil::isa<ActualOUTSVFGNode>(node))
+            else if (isa<ActualOUTSVFGNode>(node))
                 _NumOfVarHaveINOUTPtsInActualOut[inOrOut]++;
-            else if (SVFUtil::isa<LoadSVFGNode>(node))
+            else if (isa<LoadSVFGNode>(node))
                 _NumOfVarHaveINOUTPtsInLoad[inOrOut]++;
-            else if (SVFUtil::isa<StoreSVFGNode>(node))
+            else if (isa<StoreSVFGNode>(node))
                 _NumOfVarHaveINOUTPtsInStore[inOrOut]++;
-            else if (SVFUtil::isa<MSSAPHISVFGNode>(node))
+            else if (isa<MSSAPHISVFGNode>(node))
                 _NumOfVarHaveINOUTPtsInMSSAPhi[inOrOut]++;
             else
                 assert(false && "unexpected node have IN/OUT set");
@@ -411,7 +411,7 @@ void FlowSensitiveStat::statAddrVarPtsSize()
     SVFG::SVFGNodeIDToNodeMapTy::const_iterator eit = fspta->svfg->end();
     for (; it != eit; ++it) {
         const SVFGNode* node = it->second;
-        if (const StoreSVFGNode* store = SVFUtil::dyn_cast<StoreSVFGNode>(node)) {
+        if (const StoreSVFGNode* store = dyn_cast<StoreSVFGNode>(node)) {
             calculateAddrVarPts(store->getPAGDstNodeID(), store);
         }
     }
@@ -436,4 +436,11 @@ void FlowSensitiveStat::calculateAddrVarPts(NodeID pointer, const SVFGNode* svfg
     }
 }
 
+/*!
+ * Print all statistics
+ */
+void FlowSensitiveStat::printStat() {
 
+    std::cout << "\n****Flow-Sensitive Pointer Analysis Statistics****\n";
+    PTAStat::printStat();
+}

@@ -37,7 +37,6 @@
 #define SVFGSTAT_H_
 
 #include "MemoryModel/MemModel.h"
-#include "MSSA/SVFG.h"
 #include "Util/PTAStat.h"
 #include "Util/SCC.h"
 
@@ -84,6 +83,9 @@ private:
     MemSSA* mssa;
 };
 
+class SVFGEdge;
+class SVFGNode;
+class SVFG;
 
 class SVFGStat : public PTAStat {
 public:

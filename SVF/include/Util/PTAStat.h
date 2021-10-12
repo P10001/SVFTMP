@@ -30,7 +30,7 @@
 #ifndef ANDERSENSTAT_H_
 #define ANDERSENSTAT_H_
 
-#include "Util/SVFUtil.h"
+#include "Util/AnalysisUtil.h"
 #include "Util/BasicTypes.h"
 #include <iostream>
 #include <map>
@@ -72,9 +72,6 @@ public:
     static const char* NumOfProcessedStores;	///< PAG processed store edge
     static const char* NumOfProcessedCopys;		///< PAG processed copy edge
     static const char* NumOfProcessedGeps;		///< PAG processed gep edge
-
-    static const char* NumOfSfr;                ///< num of field representatives
-    static const char* NumOfFieldExpand;
 
     static const char* NumOfFunctionObjs;	///< Function numbers
     static const char* NumOfGlobalObjs;	///< PAG global object node
@@ -141,7 +138,7 @@ public:
 
     virtual void performStat();
 
-    virtual void printStat(string str = "");
+    virtual void printStat();
 
     virtual void performStatPerQuery(NodeID ptr) {}
 

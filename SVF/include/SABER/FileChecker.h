@@ -52,8 +52,7 @@ public:
     }
     /// We start from here
     virtual bool runOnModule(llvm::Module& module) {
-        SVFModule svfModule(module);
-        return runOnModule(svfModule);
+        return runOnModule(module);
     }
 
     /// We start from here
@@ -64,21 +63,21 @@ public:
     }
 
     /// Get pass name
-    virtual inline StringRef getPassName() const {
+    virtual inline llvm::StringRef getPassName() const {
         return "File Open/Close Analysis";
     }
 
     /// Pass dependence
-    virtual void getAnalysisUsage(AnalysisUsage& au) const {
+    virtual void getAnalysisUsage(llvm::AnalysisUsage& au) const {
         /// do not intend to change the IR in this pass,
         au.setPreservesAll();
     }
 
-    inline bool isSourceLikeFun(const Function* fun) {
+    inline bool isSourceLikeFun(const llvm::Function* fun) {
         return SaberCheckerAPI::getCheckerAPI()->isFOpen(fun);
     }
     /// Whether the function is a heap deallocator (free/release memory)
-    inline bool isSinkLikeFun(const Function* fun) {
+    inline bool isSinkLikeFun(const llvm::Function* fun) {
         return SaberCheckerAPI::getCheckerAPI()->isFClose(fun);
     }
     /// Report file/close bugs

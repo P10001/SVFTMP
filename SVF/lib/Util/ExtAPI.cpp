@@ -603,7 +603,14 @@ static const ei_pair ei_pairs[]= {
     {"tigetstr", ExtAPI::EFT_NOSTRUCT_ALLOC},
     {"tmpnam", ExtAPI::EFT_NOSTRUCT_ALLOC},
     {"ttyname", ExtAPI::EFT_NOSTRUCT_ALLOC},
-
+    {"apr_palloc", ExtAPI::EFT_POOL_ALLOC},
+    {"apr_pcalloc", ExtAPI::EFT_POOL_ALLOC},
+    {"apr_pcalloc_debug", ExtAPI::EFT_POOL_ALLOC},
+    {"ngx_alloc", ExtAPI::EFT_POOL_ALLOC}, // not really pool, but we'll treat it the same
+    {"ngx_calloc", ExtAPI::EFT_POOL_ALLOC},
+    {"ngx_pnalloc", ExtAPI::EFT_POOL_ALLOC},
+    {"ngx_palloc", ExtAPI::EFT_POOL_ALLOC},
+    {"ngx_pcalloc", ExtAPI::EFT_POOL_ALLOC},
     {"__ctype_b_loc", ExtAPI::EFT_STAT2},
     {"__ctype_tolower_loc", ExtAPI::EFT_STAT2},
     {"__ctype_toupper_loc", ExtAPI::EFT_STAT2},

@@ -33,12 +33,12 @@
 #define POINTSTO_H_
 
 #include "MemoryModel/ConditionalPT.h"
-#include "Util/SVFUtil.h"
+#include "Util/AnalysisUtil.h"
 
 /// Overloading operator << for dumping conditional variable
 //@{
 template<class Cond>
-raw_ostream& operator<< (raw_ostream &o, const CondVar<Cond> &cvar) {
+llvm::raw_ostream& operator<< (llvm::raw_ostream &o, const CondVar<Cond> &cvar) {
     o << cvar.toString();
     return o;
 }
@@ -144,7 +144,7 @@ private:
 public:
     /// Debugging functions
     //@{
-    virtual inline void dumpPts(const PtsMap & ptsSet,raw_ostream & O = SVFUtil::outs()) const {
+    virtual inline void dumpPts(const PtsMap & ptsSet,llvm::raw_ostream & O = llvm::outs()) const {
         for (PtsMapConstIter nodeIt = ptsSet.begin(); nodeIt != ptsSet.end(); nodeIt++) {
             const Key& var = nodeIt->first;
             const Data & pts = nodeIt->second;

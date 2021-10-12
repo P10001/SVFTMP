@@ -30,8 +30,11 @@
 #ifndef DATAFLOWUTIL_H_
 #define DATAFLOWUTIL_H_
 
-#include "Util/BasicTypes.h"
-
+#include <llvm/Analysis/DominanceFrontier.h>
+#include <llvm/Analysis/PostDominators.h>
+#include <llvm/Analysis/LoopInfo.h>
+#include <llvm/Analysis/ScalarEvolution.h>
+#include <llvm/Analysis/ScalarEvolutionExpressions.h>
 
 /*!
  * Wrapper for SCEV collected from function pass ScalarEvolution
@@ -42,13 +45,13 @@ public:
     PTASCEV():scev(NULL), start(NULL), step(NULL),ptr(NULL),inloop(false),tripcount(0) {}
 
     /// Constructor
-    PTASCEV(const Value* p, const SCEV* s, ScalarEvolution* SE): scev(s),start(NULL), step(NULL), ptr(p), inloop(false), tripcount(0) {
-        if(const SCEVAddRecExpr* ar = SVFUtil::dyn_cast<SCEVAddRecExpr>(s)) {
-            if (const SCEVConstant *startExpr = SVFUtil::dyn_cast<SCEVConstant>(ar->getStart()))
+    PTASCEV(const llvm::Value* p, const llvm::SCEV* s, llvm::ScalarEvolution* SE): scev(s),start(NULL), step(NULL), ptr(p), inloop(false), tripcount(0) {
+        if(const llvm::SCEVAddRecExpr* ar = llvm::dyn_cast<llvm::SCEVAddRecExpr>(s)) {
+            if (const llvm::SCEVConstant *startExpr = llvm::dyn_cast<llvm::SCEVConstant>(ar->getStart()))
                 start = startExpr->getValue();
-            if (const SCEVConstant *stepExpr = SVFUtil::dyn_cast<SCEVConstant>(ar->getStepRecurrence(*SE)))
+            if (const llvm::SCEVConstant *stepExpr = llvm::dyn_cast<llvm::SCEVConstant>(ar->getStepRecurrence(*SE)))
                 step = stepExpr->getValue();
-            tripcount = SE->getSmallConstantTripCount(const_cast<Loop*>(ar->getLoop()));
+            tripcount = SE->getSmallConstantTripCount(const_cast<llvm::Loop*>(ar->getLoop()));
             inloop = true;
         }
     }
@@ -61,10 +64,10 @@ public:
     virtual ~PTASCEV() {
     }
 
-    const SCEV *scev;
-    const Value* start;
-    const Value* step;
-    const Value *ptr;
+    const llvm::SCEV *scev;
+    const llvm::Value* start;
+    const llvm::Value* step;
+    const llvm::Value *ptr;
     bool inloop;
     unsigned tripcount;
 
@@ -107,15 +110,15 @@ public:
 /*!
  * LoopInfo used in PTA
  */
-class PTALoopInfo : public LoopInfo {
+class PTALoopInfo : public llvm::LoopInfo {
 public:
 
-    PTALoopInfo() : LoopInfo()
+    PTALoopInfo() : llvm::LoopInfo()
     {}
 
-    bool runOnLI(Function& fun) {
+    bool runOnLI(llvm::Function& fun) {
         releaseMemory();
-        DominatorTree dt;
+        llvm::DominatorTree dt;
         dt.recalculate(fun);
         analyze(dt);
         return false;
@@ -131,9 +134,9 @@ public:
 class PTACFInfoBuilder {
 
 public:
-    typedef std::map<const Function*, DominatorTree*> FunToDTMap;  ///< map a function to its dominator tree
-    typedef std::map<const Function*, PostDominatorTree*> FunToPostDTMap;  ///< map a function to its post dominator tree
-    typedef std::map<const Function*, PTALoopInfo*> FunToLoopInfoMap;  ///< map a function to its loop info
+    typedef std::map<const llvm::Function*, llvm::DominatorTree*> FunToDTMap;  ///< map a function to its dominator tree
+    typedef std::map<const llvm::Function*, llvm::PostDominatorTree*> FunToPostDTMap;  ///< map a function to its post dominator tree
+    typedef std::map<const llvm::Function*, PTALoopInfo*> FunToLoopInfoMap;  ///< map a function to its loop info
 
     /// Constructor
     PTACFInfoBuilder() {
@@ -153,8 +156,8 @@ public:
     }
 
     /// Get loop info of a function
-    PTALoopInfo* getLoopInfo(const Function* f) {
-        Function* fun = const_cast<Function*>(f);
+    PTALoopInfo* getLoopInfo(const llvm::Function* f) {
+        llvm::Function* fun = const_cast<llvm::Function*>(f);
         FunToLoopInfoMap::iterator it = funToLoopInfoMap.find(fun);
         if(it==funToLoopInfoMap.end()) {
             PTALoopInfo* loopInfo = new PTALoopInfo();
@@ -167,13 +170,13 @@ public:
     }
 
     /// Get post dominator tree of a function
-    PostDominatorTree* getPostDT(const Function* f) {
-        Function* fun = const_cast<Function*>(f);
+    llvm::PostDominatorTree* getPostDT(const llvm::Function* f) {
+        llvm::Function* fun = const_cast<llvm::Function*>(f);
         FunToPostDTMap::iterator it = funToPDTMap.find(fun);
         if(it==funToPDTMap.end()) {
-            PostDominatorTreeWrapperPass* postDT = new PostDominatorTreeWrapperPass();
+            llvm::PostDominatorTreeWrapperPass* postDT = new llvm::PostDominatorTreeWrapperPass();
             postDT->runOnFunction(*fun);
-            PostDominatorTree * PDT = &(postDT->getPostDomTree());
+            llvm::PostDominatorTree * PDT = &(postDT->getPostDomTree());
             funToPDTMap[fun] = PDT;
             return PDT;
         }
@@ -182,11 +185,11 @@ public:
     }
 
     /// Get dominator tree of a function
-    DominatorTree* getDT(const Function* f) {
-        Function* fun = const_cast<Function*>(f);
+    llvm::DominatorTree* getDT(const llvm::Function* f) {
+        llvm::Function* fun = const_cast<llvm::Function*>(f);
         FunToDTMap::iterator it = funToDTMap.find(fun);
         if(it==funToDTMap.end()) {
-            DominatorTree* dt = new DominatorTree();
+            llvm::DominatorTree* dt = new llvm::DominatorTree();
             dt->recalculate(*fun);
             funToDTMap[fun] = dt;
             return dt;
@@ -204,35 +207,35 @@ private:
 /*!
  * Iterated dominance frontier
  */
-class IteratedDominanceFrontier: public llvm::DominanceFrontierBase<BasicBlock, false> {
+class IteratedDominanceFrontier: public llvm::DominanceFrontierBase<llvm::BasicBlock, false> {
 
 private:
-    const DominanceFrontier *DF;
+    const llvm::DominanceFrontier *DF;
 
-    void calculate(BasicBlock *, const DominanceFrontier &DF);
+    void calculate(llvm::BasicBlock *, const llvm::DominanceFrontier &DF);
 
 public:
     static char ID;
 
     IteratedDominanceFrontier() :
-    	DominanceFrontierBase(), DF(NULL) {
+        llvm::DominanceFrontierBase<llvm::BasicBlock, false>(), DF(NULL) {
     }
 
     virtual ~IteratedDominanceFrontier() {
     }
 
-    virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+    virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const {
         AU.setPreservesAll();
-        // AU.addRequired<DominanceFrontier>();
+        // AU.addRequired<llvm::DominanceFrontier>();
     }
 
-//	virtual bool runOnFunction(Function &m) {
+//	virtual bool runOnFunction(llvm::Function &m) {
 //		Frontiers.clear();
-//		DF = &getAnalysis<DominanceFrontier>();
+//		DF = &getAnalysis<llvm::DominanceFrontier>();
 //		return false;
 //	}
 
-    iterator getIDFSet(BasicBlock *B) {
+    iterator getIDFSet(llvm::BasicBlock *B) {
         if (Frontiers.find(B) == Frontiers.end())
             calculate(B, *DF);
         return Frontiers.find(B);

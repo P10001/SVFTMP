@@ -31,11 +31,15 @@
 #define THREADAPI_CPP_
 
 #include "Util/ThreadAPI.h"
-#include "Util/SVFUtil.h"
+#include "Util/AnalysisUtil.h"
+#include <llvm/IR/Module.h>
+#include <llvm/IR/InstIterator.h>	// for inst iteration
 #include <iostream>		/// std output
 #include <stdio.h>
 #include <iomanip>		/// for setw
 
+
+using namespace llvm;
 using namespace std;
 
 ThreadAPI* ThreadAPI::tdAPI = NULL;
@@ -117,28 +121,28 @@ void ThreadAPI::init() {
 /*!
  *
  */
-const Function* ThreadAPI::getCallee(const Instruction *inst) const {
-    return SVFUtil::getCallee(inst);
+const llvm::Function* ThreadAPI::getCallee(const llvm::Instruction *inst) const {
+    return analysisUtil::getCallee(inst);
 }
 
 /*!
  *
  */
-const Function* ThreadAPI::getCallee(const CallSite cs) const {
-    return SVFUtil::getCallee(cs);
+const llvm::Function* ThreadAPI::getCallee(const llvm::CallSite cs) const {
+    return analysisUtil::getCallee(cs);
 }
 
 /*!
  *
  */
-const CallSite ThreadAPI::getLLVMCallSite(const Instruction *inst) const {
-    return SVFUtil::getLLVMCallSite(inst);
+const llvm::CallSite ThreadAPI::getLLVMCallSite(const llvm::Instruction *inst) const {
+    return analysisUtil::getLLVMCallSite(inst);
 }
 
 /*!
  *
  */
-void ThreadAPI::statInit(StringMap& tdAPIStatMap) {
+void ThreadAPI::statInit(StringMap<u32_t>& tdAPIStatMap) {
 
     tdAPIStatMap["pthread_create"] = 0;
 
@@ -179,7 +183,7 @@ void ThreadAPI::statInit(StringMap& tdAPIStatMap) {
 
 void ThreadAPI::performAPIStat(SVFModule module) {
 
-    StringMap tdAPIStatMap;
+    StringMap<u32_t> tdAPIStatMap;
 
     statInit(tdAPIStatMap);
 
@@ -189,9 +193,9 @@ void ThreadAPI::performAPIStat(SVFModule module) {
         for (inst_iterator II = inst_begin(*it), E = inst_end(*it); II != E;
                 ++II) {
             const Instruction *inst = &*II;
-            if (!SVFUtil::isa<CallInst>(inst))
+            if (!isa<CallInst>(inst))
                 continue;
-            const Function* fun = SVFUtil::getCallee(inst);
+            const Function* fun = analysisUtil::getCallee(inst);
             TD_TYPE type = getType(fun);
             switch (type) {
             case TD_FORK: {

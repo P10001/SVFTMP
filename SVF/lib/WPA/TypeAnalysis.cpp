@@ -31,34 +31,21 @@
 #include "MemoryModel/CHA.h"
 #include "Util/CPPUtil.h"
 #include "Util/PTAStat.h"
-#include "Util/ICFGStat.h"
-#include "Util/VFG.h"
 
-using namespace SVFUtil;
+using namespace llvm;
 using namespace cppUtil;
 using namespace std;
 
-llvm::cl::opt<bool> genICFG("genicfg", llvm::cl::init(true), llvm::cl::desc("Generate ICFG graph"));
-
 /// Initialize analysis
 void TypeAnalysis::initialize(SVFModule svfModule) {
-    Andersen::initialize(svfModule);
-	if (genICFG) {
-		icfg = new ICFG(ptaCallGraph);
-		icfg->dump("icfg_initial");
-		icfg->dump("vfg_initial");
-		if (print_stat){
-			ICFGStat stat(icfg);
-			stat.performStat();
-		}
-	}
+    PointerAnalysis::initialize(svfModule);
+    stat = new PTAStat(this);
 }
 
 /// Finalize analysis
 void TypeAnalysis::finalize() {
-    Andersen::finalize();
-	if (print_stat)
-		dumpCHAStats();
+    PointerAnalysis::finalize();
+    dumpCHAStats();
 }
 
 void TypeAnalysis::analyze(SVFModule svfModule){
@@ -75,6 +62,7 @@ void TypeAnalysis::callGraphSolveBasedOnCHA(const CallSiteToFunPtrMap& callsites
         		virtualCallSites.insert(cs);
             const Value *vtbl = getVCallVtblPtr(cs);
             assert(pag->hasValueNode(vtbl));
+            NodeID vtblId = pag->getValueNode(vtbl);
             VFunSet vfns;
             getVFnsFromCHA(cs, vfns);
             connectVCallToVFns(cs, vfns, newEdges);

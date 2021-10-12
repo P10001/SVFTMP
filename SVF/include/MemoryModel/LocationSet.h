@@ -34,7 +34,9 @@
 #define LOCATIONSET_H_
 
 
-#include "Util/SVFUtil.h"
+#include "Util/BasicTypes.h"
+
+#include <llvm/IR/Type.h>
 
 /*!
  * Field information of an aggregate object
@@ -46,10 +48,10 @@ public:
 private:
     u32_t fldIdx;
     u32_t byteOffset;
-    const Type* elemTy;
+    const llvm::Type* elemTy;
     ElemNumStridePairVec elemNumStridePair;
 public:
-	FieldInfo(u32_t idx, u32_t byteOff, const Type* ty, ElemNumStridePairVec pa) :
+	FieldInfo(u32_t idx, u32_t byteOff, const llvm::Type* ty, ElemNumStridePairVec pa) :
 			fldIdx(idx), byteOffset(byteOff), elemTy(ty), elemNumStridePair(pa) {
 	}
     inline u32_t getFlattenFldIdx() const {
@@ -58,7 +60,7 @@ public:
     inline u32_t getFlattenByteOffset() const {
         return byteOffset;
     }
-    inline const Type* getFlattenElemTy() const {
+    inline const llvm::Type* getFlattenElemTy() const {
         return elemTy;
     }
     inline const ElemNumStridePairVec& getElemNumStridePairVect() const {
@@ -213,17 +215,16 @@ public:
 
     /// Dump location set
     void dump() const {
-
-        SVFUtil::outs() << "LocationSet\tField_Index: " << getOffset();
-        SVFUtil::outs() << "\tOffset: " << getByteOffset()
+        llvm::outs() << "LocationSet\tField_Index: " << getOffset();
+        llvm::outs() << "\tOffset: " << getByteOffset()
                      << ",\tNum-Stride: {";
         const ElemNumStridePairVec& vec = getNumStridePair();
         ElemNumStridePairVec::const_iterator it = vec.begin();
         ElemNumStridePairVec::const_iterator eit = vec.end();
         for (; it != eit; ++it) {
-            SVFUtil::outs() << " (" << it->first << "," << it->second << ")";
+            llvm::outs() << " (" << it->first << "," << it->second << ")";
         }
-        SVFUtil::outs() << " }\n";
+        llvm::outs() << " }\n";
     }
 private:
     /// Return TRUE if successfully increased any index by 1

@@ -29,8 +29,10 @@
 
 #include "SABER/ProgSlice.h"
 #include "SABER/SaberAnnotator.h"
+#include <llvm/Analysis/PostDominators.h>
 
-using namespace SVFUtil;
+using namespace llvm;
+using namespace analysisUtil;
 
 /*!
  * Compute path conditions for nodes on the backward slice
@@ -114,45 +116,45 @@ bool ProgSlice::isSatisfiableForPairs() {
     return true;
 }
 
-CallSite ProgSlice::getCallSite(const SVFGEdge* edge) const {
+llvm::CallSite ProgSlice::getCallSite(const SVFGEdge* edge) const {
     assert(edge->isCallVFGEdge() && "not a call svfg edge?");
-    if(const CallDirSVFGEdge* callEdge = SVFUtil::dyn_cast<CallDirSVFGEdge>(edge))
+    if(const CallDirSVFGEdge* callEdge = dyn_cast<CallDirSVFGEdge>(edge))
         return getSVFG()->getCallSite(callEdge->getCallSiteId());
     else
-        return getSVFG()->getCallSite(SVFUtil::cast<CallIndSVFGEdge>(edge)->getCallSiteId());
+        return getSVFG()->getCallSite(cast<CallIndSVFGEdge>(edge)->getCallSiteId());
 }
-CallSite ProgSlice::getRetSite(const SVFGEdge* edge) const {
+llvm::CallSite ProgSlice::getRetSite(const SVFGEdge* edge) const {
     assert(edge->isRetVFGEdge() && "not a return svfg edge?");
-    if(const RetDirSVFGEdge* callEdge = SVFUtil::dyn_cast<RetDirSVFGEdge>(edge))
+    if(const RetDirSVFGEdge* callEdge = dyn_cast<RetDirSVFGEdge>(edge))
         return getSVFG()->getCallSite(callEdge->getCallSiteId());
     else
-        return getSVFG()->getCallSite(SVFUtil::cast<RetIndSVFGEdge>(edge)->getCallSiteId());
+        return getSVFG()->getCallSite(cast<RetIndSVFGEdge>(edge)->getCallSiteId());
 }
 
 /*!
  * Return llvm value for addr/copy/gep/load/phi/actualParam/formalParam/actualRet/formalRet
  * but not for store/mssaphi/actualIn/acutalOut/formalIn/formalOut
  */
-const Value* ProgSlice::getLLVMValue(const SVFGNode* node) const {
-    if(const StmtSVFGNode* stmt = SVFUtil::dyn_cast<StmtSVFGNode>(node)) {
-        if(SVFUtil::isa<StoreSVFGNode>(stmt) == false) {
+const llvm::Value* ProgSlice::getLLVMValue(const SVFGNode* node) const {
+    if(const StmtSVFGNode* stmt = dyn_cast<StmtSVFGNode>(node)) {
+        if(isa<StoreSVFGNode>(stmt) == false) {
             if(stmt->getPAGDstNode()->hasValue())
                 return stmt->getPAGDstNode()->getValue();
         }
     }
-    else if(const PHISVFGNode* phi = SVFUtil::dyn_cast<PHISVFGNode>(node)) {
+    else if(const PHISVFGNode* phi = dyn_cast<PHISVFGNode>(node)) {
         return phi->getRes()->getValue();
     }
-    else if(const ActualParmSVFGNode* ap = SVFUtil::dyn_cast<ActualParmSVFGNode>(node)) {
+    else if(const ActualParmSVFGNode* ap = dyn_cast<ActualParmSVFGNode>(node)) {
         return ap->getParam()->getValue();
     }
-    else if(const FormalParmSVFGNode* fp = SVFUtil::dyn_cast<FormalParmSVFGNode>(node)) {
+    else if(const FormalParmSVFGNode* fp = dyn_cast<FormalParmSVFGNode>(node)) {
         return fp->getParam()->getValue();
     }
-    else if(const ActualRetSVFGNode* ar = SVFUtil::dyn_cast<ActualRetSVFGNode>(node)) {
+    else if(const ActualRetSVFGNode* ar = dyn_cast<ActualRetSVFGNode>(node)) {
         return ar->getRev()->getValue();
     }
-    else if(const FormalRetSVFGNode* fr = SVFUtil::dyn_cast<FormalRetSVFGNode>(node)) {
+    else if(const FormalRetSVFGNode* fr = dyn_cast<FormalRetSVFGNode>(node)) {
         return fr->getRet()->getValue();
     }
 
@@ -175,7 +177,7 @@ std::string ProgSlice::evalFinalCond() const {
     std::set<std::string> locations;
     for(NodeBS::iterator it = elems.begin(), eit = elems.end(); it!=eit; ++it) {
         Condition* atom = pathAllocator->getCond(*it);
-        const Instruction* tinst = pathAllocator->getCondInst(atom);
+        const TerminatorInst* tinst = pathAllocator->getCondInst(atom);
         locations.insert(getSourceLoc(tinst));
     }
     /// print leak path after eliminating duplicated element
@@ -199,8 +201,8 @@ void ProgSlice::annotatePaths() {
     NodeBS elems = pathAllocator->exactCondElem(finalCond);
     for(NodeBS::iterator it = elems.begin(), eit = elems.end(); it!=eit; ++it) {
         Condition* atom = pathAllocator->getCond(*it);
-        const Instruction* tinst = pathAllocator->getCondInst(atom);
-        if(const BranchInst* br = SVFUtil::dyn_cast<BranchInst>(tinst)) {
+        const TerminatorInst* tinst = pathAllocator->getCondInst(atom);
+        if(const BranchInst* br = dyn_cast<BranchInst>(tinst)) {
             annotator.annotateFeasibleBranch(br,0);
             annotator.annotateFeasibleBranch(br,1);
         }

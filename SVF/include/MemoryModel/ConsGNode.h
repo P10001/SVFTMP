@@ -39,13 +39,9 @@ class ConstraintNode : public GenericConsNodeTy {
 public:
     typedef ConstraintEdge::ConstraintEdgeSetTy::iterator iterator;
     typedef ConstraintEdge::ConstraintEdgeSetTy::const_iterator const_iterator;
+private:
     bool _isPWCNode;
 
-    enum SCCEdgeFlag {
-        Copy, Direct
-    };
-
-private:
     ConstraintEdge::ConstraintEdgeSetTy loadInEdges; ///< all incoming load edge of this node
     ConstraintEdge::ConstraintEdgeSetTy loadOutEdges; ///< all outgoing load edge of this node
 
@@ -57,28 +53,12 @@ private:
     ConstraintEdge::ConstraintEdgeSetTy directInEdges;
     ConstraintEdge::ConstraintEdgeSetTy directOutEdges;
 
-    ConstraintEdge::ConstraintEdgeSetTy copyInEdges;
-    ConstraintEdge::ConstraintEdgeSetTy copyOutEdges;
-
-    ConstraintEdge::ConstraintEdgeSetTy gepInEdges;
-    ConstraintEdge::ConstraintEdgeSetTy gepOutEdges;
-
     ConstraintEdge::ConstraintEdgeSetTy addressInEdges; ///< all incoming address edge of this node
     ConstraintEdge::ConstraintEdgeSetTy addressOutEdges; ///< all outgoing address edge of this node
 
 public:
 
-    static SCCEdgeFlag sccEdgeFlag;
-
-    NodeBS strides;
-    bool newExpand;
-    NodeBS baseIds;
-
-    static void setSCCEdgeFlag(SCCEdgeFlag f) {
-        sccEdgeFlag = f;
-    }
-
-    ConstraintNode(NodeID i) : GenericConsNodeTy(i, 0), _isPWCNode(false), newExpand(false) {
+    ConstraintNode(NodeID i): GenericConsNodeTy(i,0), _isPWCNode(false) {
 
     }
 
@@ -100,102 +80,32 @@ public:
         return (kind == ConstraintEdge::Load || kind == ConstraintEdge::Store);
     }
 
-    /// Return constraint edges
-    //@{
-    inline const ConstraintEdge::ConstraintEdgeSetTy& getDirectInEdges() const {
-        return directInEdges;
-    }
-    inline const ConstraintEdge::ConstraintEdgeSetTy& getDirectOutEdges() const {
-        return directOutEdges;
-    }
-    inline const ConstraintEdge::ConstraintEdgeSetTy& getCopyInEdges() const {
-        return copyInEdges;
-    }
-    inline const ConstraintEdge::ConstraintEdgeSetTy& getCopyOutEdges() const {
-        return copyOutEdges;
-    }
-    inline const ConstraintEdge::ConstraintEdgeSetTy& getGepInEdges() const {
-        return gepInEdges;
-    }
-    inline const ConstraintEdge::ConstraintEdgeSetTy& getGepOutEdges() const {
-        return gepOutEdges;
-    }
-    inline const ConstraintEdge::ConstraintEdgeSetTy& getLoadInEdges() const {
-        return loadInEdges;
-    }
-    inline const ConstraintEdge::ConstraintEdgeSetTy& getLoadOutEdges() const {
-        return loadOutEdges;
-    }
-    inline const ConstraintEdge::ConstraintEdgeSetTy& getStoreInEdges() const {
-        return storeInEdges;
-    }
-    inline const ConstraintEdge::ConstraintEdgeSetTy& getStoreOutEdges() const {
-        return storeOutEdges;
-    }
-    inline const ConstraintEdge::ConstraintEdgeSetTy& getAddrInEdges() const {
-        return addressInEdges;
-    }
-    inline const ConstraintEdge::ConstraintEdgeSetTy& getAddrOutEdges() const {
-        return addressOutEdges;
-    }
-    //@}
-
     ///  Iterators
     //@{
     inline iterator directOutEdgeBegin() {
-        if (sccEdgeFlag == Copy)
-            return copyOutEdges.begin();
-        else
-            return directOutEdges.begin();
+        return directOutEdges.begin();
     }
-
     inline iterator directOutEdgeEnd() {
-        if (sccEdgeFlag == Copy)
-            return copyOutEdges.end();
-        else
-            return directOutEdges.end();
+        return directOutEdges.end();
     }
-
     inline iterator directInEdgeBegin() {
-        if (sccEdgeFlag == Copy)
-            return copyInEdges.begin();
-        else
-            return directInEdges.begin();
+        return directInEdges.begin();
     }
-
     inline iterator directInEdgeEnd() {
-        if (sccEdgeFlag == Copy)
-            return copyInEdges.end();
-        else
-            return directInEdges.end();
+        return directInEdges.end();
     }
 
     inline const_iterator directOutEdgeBegin() const {
-        if (sccEdgeFlag == Copy)
-            return copyOutEdges.begin();
-        else
-            return directOutEdges.begin();
+        return directOutEdges.begin();
     }
-
     inline const_iterator directOutEdgeEnd() const {
-        if (sccEdgeFlag == Copy)
-            return copyOutEdges.end();
-        else
-            return directOutEdges.end();
+        return directOutEdges.end();
     }
-
     inline const_iterator directInEdgeBegin() const {
-        if (sccEdgeFlag == Copy)
-            return copyInEdges.begin();
-        else
-            return directInEdges.begin();
+        return directInEdges.begin();
     }
-
     inline const_iterator directInEdgeEnd() const {
-        if (sccEdgeFlag == Copy)
-            return copyInEdges.end();
-        else
-            return directInEdges.end();
+        return directInEdges.end();
     }
 
     ConstraintEdge::ConstraintEdgeSetTy& incomingAddrEdges() {
@@ -247,21 +157,17 @@ public:
 
     ///  Add constraint graph edges
     //@{
-    inline void addIncomingCopyEdge(CopyCGEdge *inEdge) {
+    inline void addIncomingCopyEdge(CopyCGEdge* inEdge) {
         addIncomingDirectEdge(inEdge);
-        copyInEdges.insert(inEdge);
     }
     inline void addIncomingGepEdge(GepCGEdge* inEdge) {
         addIncomingDirectEdge(inEdge);
-        gepInEdges.insert(inEdge);
     }
-    inline void addOutgoingCopyEdge(CopyCGEdge *outEdge) {
+    inline void addOutgoingCopyEdge(CopyCGEdge* outEdge) {
         addOutgoingDirectEdge(outEdge);
-        copyOutEdges.insert(outEdge);
     }
     inline void addOutgoingGepEdge(GepCGEdge* outEdge) {
         addOutgoingDirectEdge(outEdge);
-        gepOutEdges.insert(outEdge);
     }
     inline void addIncomingAddrEdge(AddrCGEdge* inEdge) {
         addressInEdges.insert(inEdge);
@@ -318,20 +224,12 @@ public:
     }
 
     inline void removeOutgoingDirectEdge(ConstraintEdge* outEdge) {
-        if (SVFUtil::isa<GepCGEdge>(outEdge))
-            gepOutEdges.erase(outEdge);
-        else
-            copyOutEdges.erase(outEdge);
         Size_t num1 = directOutEdges.erase(outEdge);
         Size_t num2 = removeOutgoingEdge(outEdge);
         assert((num1 && num2) && "edge not in the set, can not remove!!!");
     }
 
     inline void removeIncomingDirectEdge(ConstraintEdge* inEdge) {
-        if (SVFUtil::isa<GepCGEdge>(inEdge))
-            gepInEdges.erase(inEdge);
-        else
-            copyInEdges.erase(inEdge);
         Size_t num1 = directInEdges.erase(inEdge);
         Size_t num2 = removeIncomingEdge(inEdge);
         assert((num1 && num2) && "edge not in the set, can not remove!!!");

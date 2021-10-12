@@ -56,6 +56,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <map>
 #include <utility>
 
+using namespace llvm;
+
 // Identifier variable for the pass
 char BreakConstantGEPs::ID = 0;
 char MergeFunctionRets::ID = 0;
@@ -64,9 +66,9 @@ STATISTIC (GEPChanges,   "Number of Converted GEP Constant Expressions");
 STATISTIC (TotalChanges, "Number of Converted Constant Expressions");
 
 // Register the pass
-static llvm::RegisterPass<BreakConstantGEPs> BP ("break-constgeps",
+static RegisterPass<BreakConstantGEPs> BP ("break-constgeps",
         "Remove GEP Constant Expressions");
-static llvm::RegisterPass<MergeFunctionRets> MP ("merge-rets",
+static RegisterPass<MergeFunctionRets> MP ("merge-rets",
         "Merge function rets into one");
 //
 // Function: hasConstantGEP()
@@ -85,7 +87,7 @@ static llvm::RegisterPass<MergeFunctionRets> MP ("merge-rets",
 //
 static ConstantExpr *
 hasConstantGEP (Value * V) {
-    if (ConstantExpr * CE = SVFUtil::dyn_cast<ConstantExpr>(V)) {
+    if (ConstantExpr * CE = dyn_cast<ConstantExpr>(V)) {
         if (CE->getOpcode() == Instruction::GetElementPtr) {
             return CE;
         } else {
@@ -121,7 +123,7 @@ convertGEP (ConstantExpr * CE, Instruction * InsertPt) {
     for (unsigned index = 1; index < CE->getNumOperands(); ++index) {
         Indices.push_back (CE->getOperand (index));
     }
-    llvm::ArrayRef<Value *> arrayIdices(Indices);
+    ArrayRef<Value *> arrayIdices(Indices);
     //
     // Update the statistics.
     //
@@ -176,7 +178,7 @@ convertExpression (ConstantExpr * CE, Instruction * InsertPt) {
     case Instruction::Or:
     case Instruction::Xor: {
         Instruction::BinaryOps Op = (Instruction::BinaryOps)(CE->getOpcode());
-        NewInst = llvm::BinaryOperator::Create (Op,
+        NewInst = BinaryOperator::Create (Op,
                                           CE->getOperand(0),
                                           CE->getOperand(1),
                                           CE->getName(),
@@ -209,7 +211,7 @@ convertExpression (ConstantExpr * CE, Instruction * InsertPt) {
     case Instruction:: ICmp: {
         Instruction::OtherOps Op = (Instruction::OtherOps)(CE->getOpcode());
         NewInst = CmpInst::Create (Op,
-                                   static_cast<CmpInst::Predicate>(CE->getPredicate()),
+                                   static_cast<llvm::CmpInst::Predicate>(CE->getPredicate()),
                                    CE->getOperand(0),
                                    CE->getOperand(1),
                                    CE->getName(),
@@ -298,7 +300,7 @@ BreakConstantGEPs::runOnModule (Module & module) {
             // instructions because the new instruction must be added to the
             // appropriate predecessor block.
             //
-            if (PHINode * PHI = SVFUtil::dyn_cast<PHINode>(I)) {
+            if (PHINode * PHI = dyn_cast<PHINode>(I)) {
                 for (unsigned index = 0; index < PHI->getNumIncomingValues(); ++index) {
                     //
                     // For PHI Nodes, if an operand is a constant expression with a GEP, we

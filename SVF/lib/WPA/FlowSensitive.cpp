@@ -31,8 +31,10 @@
 #include "WPA/WPAStat.h"
 #include "WPA/FlowSensitive.h"
 #include "WPA/Andersen.h"
+#include <llvm/Support/Debug.h>		// DEBUG TYPE
 
-using namespace SVFUtil;
+using namespace llvm;
+
 
 FlowSensitive* FlowSensitive::fspta = NULL;
 
@@ -43,7 +45,7 @@ void FlowSensitive::initialize(SVFModule svfModule) {
     PointerAnalysis::initialize(svfModule);
 
     AndersenWaveDiff* ander = AndersenWaveDiff::createAndersenWaveDiff(svfModule);
-    svfg = memSSA.buildPTROnlySVFG(ander);
+    svfg = memSSA.buildSVFG(ander);
     setGraph(svfg);
     //AndersenWaveDiff::releaseAndersenWaveDiff();
 
@@ -59,7 +61,7 @@ void FlowSensitive::analyze(SVFModule svfModule) {
 
     double start = stat->getClk();
     /// Start solving constraints
-    DBOUT(DGENERAL, outs() << SVFUtil::pasMsg("Start Solving Constraints\n"));
+    DBOUT(DGENERAL, llvm::outs() << analysisUtil::pasMsg("Start Solving Constraints\n"));
 
     do {
         numOfIteration++;
@@ -73,7 +75,7 @@ void FlowSensitive::analyze(SVFModule svfModule) {
 
     } while (updateCallGraph(getIndirectCallsites()));
 
-    DBOUT(DGENERAL, outs() << SVFUtil::pasMsg("Finish Solving Constraints\n"));
+    DBOUT(DGENERAL, llvm::outs() << analysisUtil::pasMsg("Finish Solving Constraints\n"));
 
     double end = stat->getClk();
     solveTime += (end - start) / TIMEINTERVAL;
@@ -135,49 +137,46 @@ bool FlowSensitive::processSVFGNode(SVFGNode* node)
 {
     double start = stat->getClk();
     bool changed = false;
-    if(AddrSVFGNode* addr = SVFUtil::dyn_cast<AddrSVFGNode>(node)) {
+    if(AddrSVFGNode* addr = dyn_cast<AddrSVFGNode>(node)) {
         numOfProcessedAddr++;
         if(processAddr(addr))
             changed = true;
     }
-    else if(CopySVFGNode* copy = SVFUtil::dyn_cast<CopySVFGNode>(node)) {
+    else if(CopySVFGNode* copy = dyn_cast<CopySVFGNode>(node)) {
         numOfProcessedCopy++;
         if(processCopy(copy))
             changed = true;
     }
-    else if(GepSVFGNode* gep = SVFUtil::dyn_cast<GepSVFGNode>(node)) {
+    else if(GepSVFGNode* gep = dyn_cast<GepSVFGNode>(node)) {
         numOfProcessedGep++;
         if(processGep(gep))
             changed = true;
     }
-    else if(LoadSVFGNode* load = SVFUtil::dyn_cast<LoadSVFGNode>(node)) {
+    else if(LoadSVFGNode* load = dyn_cast<LoadSVFGNode>(node)) {
         numOfProcessedLoad++;
         if(processLoad(load))
             changed = true;
     }
-    else if(StoreSVFGNode* store = SVFUtil::dyn_cast<StoreSVFGNode>(node)) {
+    else if(StoreSVFGNode* store = dyn_cast<StoreSVFGNode>(node)) {
         numOfProcessedStore++;
         if(processStore(store))
             changed = true;
     }
-    else if(PHISVFGNode* phi = SVFUtil::dyn_cast<PHISVFGNode>(node)) {
+    else if(PHISVFGNode* phi = dyn_cast<PHISVFGNode>(node)) {
         numOfProcessedPhi++;
         if (processPhi(phi))
             changed = true;
     }
-    else if(SVFUtil::isa<MSSAPHISVFGNode>(node) || SVFUtil::isa<FormalINSVFGNode>(node)
-            || SVFUtil::isa<FormalOUTSVFGNode>(node) || SVFUtil::isa<ActualINSVFGNode>(node)
-            || SVFUtil::isa<ActualOUTSVFGNode>(node)) {
+    else if(isa<MSSAPHISVFGNode>(node) || isa<FormalINSVFGNode>(node)
+            || isa<FormalOUTSVFGNode>(node) || isa<ActualINSVFGNode>(node)
+            || isa<ActualOUTSVFGNode>(node)) {
         numOfProcessedMSSANode++;
         changed = true;
     }
-    else if(SVFUtil::isa<ActualParmSVFGNode>(node) || SVFUtil::isa<FormalParmSVFGNode>(node)
-            || SVFUtil::isa<ActualRetSVFGNode>(node) || SVFUtil::isa<FormalRetSVFGNode>(node)
-            || SVFUtil::isa<NullPtrSVFGNode>(node)) {
+    else if(isa<ActualParmSVFGNode>(node) || isa<FormalParmSVFGNode>(node)
+            || isa<ActualRetSVFGNode>(node) || isa<FormalRetSVFGNode>(node)
+            || isa<NullPtrSVFGNode>(node)) {
         changed = true;
-    }
-    else if(SVFUtil::isa<CmpVFGNode>(node) || SVFUtil::isa<BinaryOPVFGNode>(node)){
-
     }
     else
         assert(false && "unexpected kind of SVFG nodes");
@@ -200,9 +199,9 @@ bool FlowSensitive::propFromSrcToDst(SVFGEdge* edge) {
     double start = stat->getClk();
     bool changed = false;
 
-    if (DirectSVFGEdge* dirEdge = SVFUtil::dyn_cast<DirectSVFGEdge>(edge))
+    if (DirectSVFGEdge* dirEdge = dyn_cast<DirectSVFGEdge>(edge))
         changed = propAlongDirectEdge(dirEdge);
-    else if (IndirectSVFGEdge* indEdge = SVFUtil::dyn_cast<IndirectSVFGEdge>(edge))
+    else if (IndirectSVFGEdge* indEdge = dyn_cast<IndirectSVFGEdge>(edge))
         changed = propAlongIndirectEdge(indEdge);
     else
         assert(false && "new kind of svfg edge?");
@@ -224,9 +223,9 @@ bool FlowSensitive::propAlongDirectEdge(const DirectSVFGEdge* edge)
     SVFGNode* dst = edge->getDstNode();
     // If this is an actual-param or formal-ret, top-level pointer's pts must be
     // propagated from src to dst.
-    if (ActualParmSVFGNode* ap = SVFUtil::dyn_cast<ActualParmSVFGNode>(src))
+    if (ActualParmSVFGNode* ap = dyn_cast<ActualParmSVFGNode>(src))
         changed = propagateFromAPToFP(ap, dst);
-    else if (FormalRetSVFGNode* fp = SVFUtil::dyn_cast<FormalRetSVFGNode>(src))
+    else if (FormalRetSVFGNode* fp = dyn_cast<FormalRetSVFGNode>(src))
         changed = propagateFromFRToAR(fp, dst);
     else {
         // Direct SVFG edge links between def and use of a top-level pointer.
@@ -246,7 +245,7 @@ bool FlowSensitive::propAlongDirectEdge(const DirectSVFGEdge* edge)
  *  Not necessary if SVFGOPT is used instead of original SVFG.
  */
 bool FlowSensitive::propagateFromAPToFP(const ActualParmSVFGNode* ap, const SVFGNode* dst) {
-    if (const FormalParmSVFGNode* fp = SVFUtil::dyn_cast<FormalParmSVFGNode>(dst)) {
+    if (const FormalParmSVFGNode* fp = dyn_cast<FormalParmSVFGNode>(dst)) {
         NodeID pagDst = fp->getParam()->getId();
         const PointsTo & srcCPts = getPts(ap->getParam()->getId());
         return unionPts(pagDst, srcCPts);
@@ -262,7 +261,7 @@ bool FlowSensitive::propagateFromAPToFP(const ActualParmSVFGNode* ap, const SVFG
  * Not necessary if SVFGOPT is used instead of original SVFG.
  */
 bool FlowSensitive::propagateFromFRToAR(const FormalRetSVFGNode* fr, const SVFGNode* dst) {
-    if (const ActualRetSVFGNode* ar = SVFUtil::dyn_cast<ActualRetSVFGNode>(dst)) {
+    if (const ActualRetSVFGNode* ar = dyn_cast<ActualRetSVFGNode>(dst)) {
         NodeID pagDst = ar->getRev()->getId();
         const PointsTo & srcCPts = getPts(fr->getRet()->getId());
         return unionPts(pagDst, srcCPts);
@@ -316,7 +315,7 @@ bool FlowSensitive::propAlongIndirectEdge(const IndirectSVFGEdge* edge)
 bool FlowSensitive::propVarPtsFromSrcToDst(NodeID var, const SVFGNode* src, const SVFGNode* dst)
 {
     bool changed = false;
-    if (SVFUtil::isa<StoreSVFGNode>(src)) {
+    if (isa<StoreSVFGNode>(src)) {
         if (updateInFromOut(src, var, dst, var))
             changed = true;
     }
@@ -383,11 +382,11 @@ bool FlowSensitive::processGep(const GepSVFGNode* edge) {
         if (isBlkObjOrConstantObj(ptd))
             tmpDstPts.set(ptd);
         else {
-            if (SVFUtil::isa<VariantGepPE>(edge->getPAGEdge())) {
+            if (isa<VariantGepPE>(edge->getPAGEdge())) {
                 setObjFieldInsensitive(ptd);
                 tmpDstPts.set(getFIObjNode(ptd));
             }
-            else if (const NormalGepPE* normalGep = SVFUtil::dyn_cast<NormalGepPE>(edge->getPAGEdge())) {
+            else if (const NormalGepPE* normalGep = dyn_cast<NormalGepPE>(edge->getPAGEdge())) {
                 NodeID fieldSrcPtdNode = getGepObjNode(ptd,	normalGep->getLocationSet());
                 tmpDstPts.set(fieldSrcPtdNode);
             }
@@ -507,7 +506,7 @@ bool FlowSensitive::processStore(const StoreSVFGNode* store) {
  */
 bool FlowSensitive::isStrongUpdate(const SVFGNode* node, NodeID& singleton) {
     bool isSU = false;
-    if (const StoreSVFGNode* store = SVFUtil::dyn_cast<StoreSVFGNode>(node)) {
+    if (const StoreSVFGNode* store = dyn_cast<StoreSVFGNode>(node)) {
         const PointsTo& dstCPSet = getPts(store->getPAGDstNodeID());
         if (dstCPSet.count() == 1) {
             /// Find the unique element in cpts
@@ -554,7 +553,7 @@ void FlowSensitive::connectCallerAndCallee(const CallEdgeMap& newEdges, SVFGEdge
         CallSite cs = iter->first;
         const FunctionSet & functions = iter->second;
         for (FunctionSet::const_iterator func_iter = functions.begin(); func_iter != functions.end(); func_iter++) {
-            const Function * func = *func_iter;
+            const llvm::Function * func = *func_iter;
             svfg->connectCallerAndCallee(cs, func, edges);
         }
     }
@@ -570,19 +569,19 @@ void FlowSensitive::updateConnectedNodes(const SVFGEdgeSetTy& edges)
             it != eit; ++it) {
         const SVFGEdge* edge = *it;
         SVFGNode* dstNode = edge->getDstNode();
-        if (SVFUtil::isa<PHISVFGNode>(dstNode)) {
+        if (isa<PHISVFGNode>(dstNode)) {
             /// If this is a formal-param or actual-ret node, we need to solve this phi
             /// node in next iteration
             pushIntoWorklist(dstNode->getId());
         }
-        else if (SVFUtil::isa<FormalINSVFGNode>(dstNode) || SVFUtil::isa<ActualOUTSVFGNode>(dstNode)) {
+        else if (isa<FormalINSVFGNode>(dstNode) || isa<ActualOUTSVFGNode>(dstNode)) {
             /// If this is a formal-in or actual-out node, we need to propagate points-to
             /// information from its predecessor node.
             bool changed = false;
 
             SVFGNode* srcNode = edge->getSrcNode();
 
-            const PointsTo& pts = SVFUtil::cast<IndirectSVFGEdge>(edge)->getPointsTo();
+            const PointsTo& pts = cast<IndirectSVFGEdge>(edge)->getPointsTo();
             for (PointsTo::iterator ptdIt = pts.begin(), ptdEit = pts.end(); ptdIt != ptdEit; ++ptdIt) {
                 NodeID ptd = *ptdIt;
 
@@ -612,7 +611,7 @@ void FlowSensitive::updateConnectedNodes(const SVFGEdgeSetTy& edges)
  */
 bool FlowSensitive::propVarPtsAfterCGUpdated(NodeID var, const SVFGNode* src, const SVFGNode* dst)
 {
-    if (SVFUtil::isa<StoreSVFGNode>(src)) {
+    if (isa<StoreSVFGNode>(src)) {
         if (propDFOutToIn(src, var, dst, var))
             return true;
     }

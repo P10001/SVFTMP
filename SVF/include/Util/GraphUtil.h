@@ -1,4 +1,4 @@
-//===- GraphPrinter.h -- Print Generic Graph---------------------//
+//===- GraphUtil.h -- Graph template for debugging---------------------------//
 //
 //                     SVF: Static Value-Flow Analysis
 //
@@ -20,19 +20,21 @@
 //
 //===----------------------------------------------------------------------===//
 
-
 /*
- * GraphPrinter.h
+ * GraphUtil.h
  *
- *  Created on: 19.Sep.,2018
- *      Author: Yulei
+ *  Created on: Jul 12, 2013
+ *      Author: yusui
  */
 
-#ifndef INCLUDE_UTIL_GRAPHPRINTER_H_
-#define INCLUDE_UTIL_GRAPHPRINTER_H_
+#ifndef GRAPHUTIL_H_
+#define GRAPHUTIL_H_
 
-#include <system_error>
+#include <llvm/Support/Debug.h> 		// for debug
+#include <llvm/ADT/GraphTraits.h>		// for Graphtraits
 #include <llvm/Support/ToolOutputFile.h>
+#include <llvm/Support/CommandLine.h>           // for tool output file
+#include <llvm/Support/GraphWriter.h>		// for graph write
 #include <llvm/Support/FileSystem.h>		// for file open flag
 
 namespace llvm {
@@ -56,7 +58,7 @@ public:
         std::string Filename = GraphName + ".dot";
         O << "Writing '" << Filename << "'...";
         std::error_code ErrInfo;
-        llvm::ToolOutputFile F(Filename.c_str(), ErrInfo, llvm::sys::fs::F_None);
+        ToolOutputFile F(Filename.c_str(), ErrInfo, sys::fs::F_None);
 
         if (!ErrInfo) {
             // dump the ValueFlowGraph here
@@ -79,7 +81,7 @@ public:
     static void PrintGraph(llvm::raw_ostream &O, const std::string &GraphName,
                            const GraphType &GT) {
         ///Define the GTraits and node iterator for printing
-        typedef llvm::GraphTraits<GraphType> GTraits;
+        typedef GraphTraits<GraphType> GTraits;
 
         typedef typename GTraits::NodeRef NodeRef;
         typedef typename GTraits::nodes_iterator node_iterator;
@@ -103,6 +105,4 @@ public:
 
 }
 
-
-
-#endif /* INCLUDE_UTIL_GRAPHPRINTER_H_ */
+#endif /* GRAPHUTIL_H_ */

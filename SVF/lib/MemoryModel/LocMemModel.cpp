@@ -29,26 +29,28 @@
 
 
 #include "MemoryModel/LocMemModel.h"
-#include "Util/SVFUtil.h"
+#include "Util/AnalysisUtil.h"
 
+#include <llvm/IR/GetElementPtrTypeIterator.h>	//for gep iterator
 #include "Util/GEPTypeBridgeIterator.h" // include bridge_gep_iterator 
 #include <vector>
 
+using namespace llvm;
 using namespace std;
-using namespace SVFUtil;
+using namespace analysisUtil;
 
 
 /*!
  * Compute gep offset
  */
-bool LocSymTableInfo::computeGepOffset(const User *V, LocationSet& ls) {
+bool LocSymTableInfo::computeGepOffset(const llvm::User *V, LocationSet& ls) {
 
     assert(V);
     int baseIndex = -1;
     int index = 0;
     for (bridge_gep_iterator gi = bridge_gep_begin(*V), ge = bridge_gep_end(*V);
             gi != ge; ++gi, ++index) {
-        if(SVFUtil::isa<ConstantInt>(gi.getOperand()) == false)
+        if(llvm::isa<ConstantInt>(gi.getOperand()) == false)
             baseIndex = index;
     }
 
@@ -59,12 +61,12 @@ bool LocSymTableInfo::computeGepOffset(const User *V, LocationSet& ls) {
         if (index <= baseIndex) {
             /// variant offset
             // Handling pointer types
-            if (const PointerType* pty = SVFUtil::dyn_cast<PointerType>(*gi)) {
+            if (const PointerType* pty = dyn_cast<PointerType>(*gi)) {
                 const Type* et = pty->getElementType();
                 Size_t sz = getTypeSizeInBytes(et);
 
                 Size_t num = 1;
-                if (const ArrayType* aty = SVFUtil::dyn_cast<ArrayType>(et))
+                if (const ArrayType* aty = dyn_cast<ArrayType>(et))
                     num = aty->getNumElements();
                 else
                     num = SymbolTableInfo::getMaxFieldLimit();
@@ -72,7 +74,7 @@ bool LocSymTableInfo::computeGepOffset(const User *V, LocationSet& ls) {
                 ls.addElemNumStridePair(std::make_pair(num, sz));
             }
             // Calculate the size of the array element
-            else if(const ArrayType* at = SVFUtil::dyn_cast<ArrayType>(*gi)) {
+            else if(const ArrayType* at = dyn_cast<ArrayType>(*gi)) {
                 const Type* et = at->getElementType();
                 Size_t sz = getTypeSizeInBytes(et);
                 Size_t num = at->getNumElements();
@@ -83,9 +85,9 @@ bool LocSymTableInfo::computeGepOffset(const User *V, LocationSet& ls) {
         }
         // constant offset
         else {
-            assert(SVFUtil::isa<ConstantInt>(gi.getOperand()) && "expecting a constant");
+            assert(isa<ConstantInt>(gi.getOperand()) && "expecting a constant");
 
-            ConstantInt *op = SVFUtil::cast<ConstantInt>(gi.getOperand());
+            ConstantInt *op = cast<ConstantInt>(gi.getOperand());
 
             //The actual index
             Size_t idx = op->getSExtValue();
@@ -93,19 +95,19 @@ bool LocSymTableInfo::computeGepOffset(const User *V, LocationSet& ls) {
             // Handling pointer types
             // These GEP instructions are simply making address computations from the base pointer address
             // e.g. idx1 = (char*) &MyVar + 4,  at this case gep only one offset index (idx)
-            if (const PointerType* pty = SVFUtil::dyn_cast<PointerType>(*gi)) {
+            if (const PointerType* pty = dyn_cast<PointerType>(*gi)) {
                 const Type* et = pty->getElementType();
                 Size_t sz = getTypeSizeInBytes(et);
                 ls.setByteOffset(ls.getByteOffset() + idx * sz);
             }
             // Calculate the size of the array element
-            else if(const ArrayType* at = SVFUtil::dyn_cast<ArrayType>(*gi)) {
+            else if(const ArrayType* at = dyn_cast<ArrayType>(*gi)) {
                 const Type* et = at->getElementType();
                 Size_t sz = getTypeSizeInBytes(et);
                 ls.setByteOffset(ls.getByteOffset() + idx * sz);
             }
             // Handling struct here
-            else if (const StructType *ST = SVFUtil::dyn_cast<StructType>(*gi)) {
+            else if (const StructType *ST = dyn_cast<StructType>(*gi)) {
                 assert(op && "non-const struct index in GEP");
                 const vector<u32_t> &so = SymbolTableInfo::Symbolnfo()->getFattenFieldOffsetVec(ST);
                 if ((unsigned)idx >= so.size()) {
@@ -134,7 +136,7 @@ void LocSymTableInfo::collectArrayInfo(const llvm::ArrayType *ty) {
     /// information and append them to the inner elements' type
     /// information later.
     u64_t out_num = ty->getNumElements();
-    const Type* elemTy = ty->getElementType();
+    const llvm::Type* elemTy = ty->getElementType();
     u32_t out_stride = getTypeSizeInBytes(elemTy);
 
     /// Array itself only has one field which is the inner most element
@@ -216,10 +218,10 @@ void LocSymTableInfo::collectStructInfo(const StructType *ty) {
  * Given LocationSet from a Gep Instruction, return a new LocationSet which matches
  * the field information of this ObjTypeInfo by considering memory layout
  */
-LocationSet LocSymTableInfo::getModulusOffset(const MemObj* obj, const LocationSet& ls) {
-    const Type* ety = obj->getType();
+LocationSet LocSymTableInfo::getModulusOffset(ObjTypeInfo* tyInfo, const LocationSet& ls) {
+    const llvm::Type* ety = tyInfo->getType();
 
-    if (SVFUtil::isa<StructType>(ety) || SVFUtil::isa<ArrayType>(ety)) {
+    if (isa<StructType>(ety) || isa<ArrayType>(ety)) {
         /// Find an appropriate field for this LocationSet
         const std::vector<FieldInfo>& infovec = SymbolTableInfo::Symbolnfo()->getFlattenFieldInfoVec(ety);
         std::vector<FieldInfo>::const_iterator it = infovec.begin();
@@ -245,7 +247,7 @@ LocationSet LocSymTableInfo::getModulusOffset(const MemObj* obj, const LocationS
         }
     }
     else {
-        if (obj->isStaticObj() || obj->isHeap()) {
+        if (tyInfo->isStaticObj() || tyInfo->isHeap()) {
             // TODO: Objects which cannot find proper field for a certain offset including
             //       arguments in main(), static objects allocated before main and heap
             //       objects. Right now they're considered to have infinite fields. So we
@@ -272,7 +274,7 @@ LocationSet LocSymTableInfo::getModulusOffset(const MemObj* obj, const LocationS
             wrnMsg("try to create a gep node with negative offset.");
             offset = abs(offset);
         }
-        u32_t maxOffset = obj->getMaxFieldOffsetLimit();
+        u32_t maxOffset = tyInfo->getMaxFieldOffsetLimit();
         if (maxOffset != 0)
             offset = offset % maxOffset;
         else
@@ -309,6 +311,6 @@ void LocSymTableInfo::verifyStructSize(StInfo *stinfo, u32_t structSize) {
  */
 u32_t LocObjTypeInfo::getObjSize(const Value* val) {
 
-    Type* ety  = SVFUtil::cast<PointerType>(val->getType())->getElementType();
+    Type* ety  = cast<PointerType>(val->getType())->getElementType();
     return LocSymTableInfo::Symbolnfo()->getTypeSizeInBytes(ety);
 }

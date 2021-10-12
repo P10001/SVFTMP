@@ -33,6 +33,9 @@
 #include "MemoryModel/PAG.h"
 #include "Util/ExtAPI.h"
 
+#include <llvm/IR/InstVisitor.h>	// for instruction visitor
+
+#include <set>
 class SVFModule;
 /*!
  *  PAG Builder
@@ -41,6 +44,9 @@ class PAGBuilder: public llvm::InstVisitor<PAGBuilder> {
 private:
     PAG* pag;
     SVFModule svfMod;
+    
+    std::map<llvm::GlobalVariable*, std::vector<llvm::Function*>> globalVarToFuncMap;
+
 public:
     /// Constructor
     PAGBuilder(): pag(PAG::getPAG()) {
@@ -61,7 +67,7 @@ public:
     //@{
     void initalNode();
     void addEdge(NodeID src, NodeID dst, PAGEdge::PEDGEK kind,
-                 Size_t offset = 0, Instruction* cs = NULL);
+                 Size_t offset = 0, llvm::Instruction* cs = NULL);
     // @}
 
     /// Sanity check for PAG
@@ -70,7 +76,7 @@ public:
     /// Get different kinds of node
     //@{
     // GetValNode - Return the value node according to a LLVM Value.
-    NodeID getValueNode(const Value *V) {
+    NodeID getValueNode(const llvm::Value *V) {
         // first handle gep edge if val if a constant expression
         processCE(V);
 
@@ -79,17 +85,17 @@ public:
     }
 
     /// GetObject - Return the object node (stack/global/heap/function) according to a LLVM Value
-    inline NodeID getObjectNode(const Value *V) {
+    inline NodeID getObjectNode(const llvm::Value *V) {
         return pag->getObjectNode(V);
     }
 
     /// getReturnNode - Return the node representing the unique return value of a function.
-    inline NodeID getReturnNode(const Function *func) {
+    inline NodeID getReturnNode(const llvm::Function *func) {
         return pag->getReturnNode(func);
     }
 
     /// getVarargNode - Return the node representing the unique variadic argument of a function.
-    inline NodeID getVarargNode(const Function *func) {
+    inline NodeID getVarargNode(const llvm::Function *func) {
         return pag->getVarargNode(func);
     }
     //@}
@@ -97,95 +103,136 @@ public:
     /// Handle globals including (global variable and functions)
     //@{
     void visitGlobal(SVFModule svfModule);
-    void InitialGlobal(const GlobalVariable *gvar, Constant *C,
+    void InitialGlobal(const llvm::GlobalVariable *gvar, llvm::Constant *C,
                        u32_t offset);
-    NodeID getGlobalVarField(const GlobalVariable *gvar, u32_t offset);
+    NodeID getGlobalVarField(const llvm::GlobalVariable *gvar, u32_t offset);
     //@}
 
     /// Process constant expression
-    void processCE(const Value *val);
+    void processCE(const llvm::Value *val);
 
     /// Compute offset of a gep instruction or gep constant expression
-    bool computeGepOffset(const User *V, LocationSet& ls);
+    bool computeGepOffset(const llvm::User *V, LocationSet& ls);
 
     /// Handle direct call
-    void handleDirectCall(CallSite cs, const Function *F);
+    void handleDirectCall(llvm::CallSite cs, const llvm::Function *F);
 
     /// Handle indirect call
-    void handleIndCall(CallSite cs);
+    void handleIndCall(llvm::CallSite cs);
 
     /// Handle external call
     //@{
-    virtual void handleExtCall(CallSite cs, const Function *F);
-    const Type *getBaseTypeAndFlattenedFields(Value* v, std::vector<LocationSet> &fields);
-    void addComplexConsForExt(Value *D, Value *S,u32_t sz = 0);
+    virtual void handleExtCall(llvm::CallSite cs, const llvm::Function *F);
+    const llvm::Type *getBaseTypeAndFlattenedFields(llvm::Value* v, std::vector<LocationSet> &fields);
+    void addComplexConsForExt(llvm::Value *D, llvm::Value *S,u32_t sz = 0);
     //@}
+    
+    /// Hamed: Functions for keeping track of functions assigned as FPs
+    bool isFunctionAssignment(llvm::Instruction *I); 
+    void addFunctionPointerAssignment(llvm::Function *fun, llvm::Instruction *I);
 
     /// Our visit overrides.
     //@{
     // Instructions that cannot be folded away.
-    virtual void visitAllocaInst(AllocaInst &AI);
-    void visitPHINode(PHINode &I);
-    void visitStoreInst(StoreInst &I);
-    void visitLoadInst(LoadInst &I);
-    void visitGetElementPtrInst(GetElementPtrInst &I);
-    void visitCallInst(CallInst &I) {
+    virtual void visitAllocaInst(llvm::AllocaInst &AI);
+    void visitPHINode(llvm::PHINode &I);
+    void visitStoreInst(llvm::StoreInst &I);
+    void visitLoadInst(llvm::LoadInst &I);
+    void visitGetElementPtrInst(llvm::GetElementPtrInst &I);
+    void visitCallInst(llvm::CallInst &I) {
         visitCallSite(&I);
     }
-    void visitInvokeInst(InvokeInst &II) {
+    void visitInvokeInst(llvm::InvokeInst &II) {
         visitCallSite(&II);
+        visitTerminatorInst(II);
     }
-    void visitCallSite(CallSite cs);
-    void visitReturnInst(ReturnInst &I);
-    void visitCastInst(CastInst &I);
-    void visitSelectInst(SelectInst &I);
-    void visitExtractValueInst(ExtractValueInst  &EVI);
-    void visitInsertValueInst(InsertValueInst &I) {
-		pag->addBlackHoleAddrEdge(getValueNode(&I));
+    void visitCallSite(llvm::CallSite cs);
+    void visitReturnInst(llvm::ReturnInst &I);
+    void visitCastInst(llvm::CastInst &I);
+    void visitSelectInst(llvm::SelectInst &I);
+    void visitIntToPtrInst(llvm::IntToPtrInst &inst);
+    void visitExtractValueInst(llvm::ExtractValueInst &EVI);
+    void visitInsertValueInst(llvm::InsertValueInst &IVI) {
     }
-    // TerminatorInst and UnwindInst have been removed since llvm-8.0.0
-    // void visitTerminatorInst(TerminatorInst &TI) {}
-    // void visitUnwindInst(UnwindInst &I) { /*returns void*/}
-
-    void visitBinaryOperator(BinaryOperator &I);
-    void visitCmpInst(CmpInst &I);
+    // Terminators
+    void visitTerminatorInst(llvm::TerminatorInst &TI) {
+    }
+    void visitBinaryOperator(llvm::BinaryOperator &I) {
+    }
+    void visitCmpInst(llvm::CmpInst &I) {
+    }
 
     /// TODO: do we need to care about these corner cases?
-    void visitVAArgInst(VAArgInst &I) {
+    void visitPtrToIntInst(llvm::PtrToIntInst &inst) {
     }
-    void visitExtractElementInst(ExtractElementInst &I);
+    void visitVAArgInst(llvm::VAArgInst &I) {
+    }
+    void visitExtractElementInst(llvm::ExtractElementInst &I);
 
-    void visitInsertElementInst(InsertElementInst &I) {
-		pag->addBlackHoleAddrEdge(getValueNode(&I));
+    void visitInsertElementInst(llvm::InsertElementInst &I) {
     }
-    void visitShuffleVectorInst(ShuffleVectorInst &I) {
-		pag->addBlackHoleAddrEdge(getValueNode(&I));
+    void visitShuffleVectorInst(llvm::ShuffleVectorInst &I) {
     }
-    void visitLandingPadInst(LandingPadInst &I) {
-		pag->addBlackHoleAddrEdge(getValueNode(&I));
+    void visitLandingPadInst(llvm::LandingPadInst &I) {
     }
 
     /// Instruction not that often
-    void visitResumeInst(ResumeInst &I) { /*returns void*/
+    void visitResumeInst(llvm::TerminatorInst &I) { /*returns void*/
     }
-    void visitUnreachableInst(UnreachableInst &I) { /*returns void*/
+    void visitUnwindInst(llvm::TerminatorInst &I) { /*returns void*/
     }
-    void visitFenceInst(FenceInst &I) { /*returns void*/
-		pag->addBlackHoleAddrEdge(getValueNode(&I));
+    void visitUnreachableInst(llvm::TerminatorInst &I) { /*returns void*/
     }
-    void visitAtomicCmpXchgInst(AtomicCmpXchgInst &I) {
-		pag->addBlackHoleAddrEdge(getValueNode(&I));
+    void visitFenceInst(llvm::FenceInst &I) { /*returns void*/
     }
-    void visitAtomicRMWInst(AtomicRMWInst &I) {
-		pag->addBlackHoleAddrEdge(getValueNode(&I));
+    void visitAtomicCmpXchgInst(llvm::AtomicCmpXchgInst &I) {
+    }
+    void visitAtomicRMWInst(llvm::AtomicRMWInst &I) {
     }
 
     /// Provide base case for our instruction visit.
-    inline void visitInstruction(Instruction &I) {
+    inline void visitInstruction(llvm::Instruction &I) {
         // If a new instruction is added to LLVM that we don't handle.
         // TODO: ignore here:
     }
     //}@
+
+    void findAllFunctions(llvm::Value*, std::vector<llvm::Function*>&, std::set<llvm::Value*>&);
+};
+
+/*!
+ * Build PAG from a user specified file (for debugging purpose)
+ */
+class PAGBuilderFromFile {
+
+private:
+    PAG* pag;
+    std::string file;
+public:
+    /// Constructor
+    PAGBuilderFromFile(std::string f) :
+        pag(PAG::getPAG(true)), file(f) {
+    }
+    /// Destructor
+    ~PAGBuilderFromFile() {
+    }
+
+    /// Return PAG
+    PAG* getPAG() const {
+        return pag;
+    }
+
+    /// Return file name
+    std::string getFileName() const {
+        return file;
+    }
+
+    /// Start building
+    PAG* build();
+
+    // Add edges
+    void addEdge(NodeID nodeSrc, NodeID nodeDst, Size_t offset,
+                 std::string edge);
 };
 
 #endif /* PAGBUILDER_H_ */

@@ -30,14 +30,14 @@
 #ifndef INCLUDE_WPA_TYPEANALYSIS_H_
 #define INCLUDE_WPA_TYPEANALYSIS_H_
 
-#include "WPA/Andersen.h"
+#include "MemoryModel/PointerAnalysis.h"
 
-class TypeAnalysis:  public Andersen {
+class TypeAnalysis:  public BVDataPTAImpl{
 
 public:
     /// Constructor
 	TypeAnalysis(PTATY type = TypeCPP_WPA)
-        :  Andersen(type){
+        :  BVDataPTAImpl(type){
     }
 
     /// Destructor
@@ -70,7 +70,7 @@ public:
     //@}
 
 private:
-    std::set<CallSite> virtualCallSites;
+    std::set<llvm::CallSite> virtualCallSites;
 };
 
 

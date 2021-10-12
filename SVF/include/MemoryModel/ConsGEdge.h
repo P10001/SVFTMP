@@ -33,6 +33,10 @@
 #include "MemoryModel/PAG.h"
 #include "Util/WorkList.h"
 
+#include <llvm/ADT/STLExtras.h>
+#include <llvm/ADT/GraphTraits.h>
+#include <llvm/IR/CallSite.h>
+
 #include <map>
 #include <set>
 

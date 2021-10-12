@@ -46,38 +46,35 @@ public:
     typedef llvm::DenseMap<NodeID, NodeID> NodeToRepMap;
     typedef llvm::DenseMap<NodeID, NodeBS> NodeToSubsMap;
     typedef FIFOWorkList<NodeID> WorkList;
-
-protected:
+private:
     PAG*pag;
     NodeToRepMap nodeToRepMap;
     NodeToSubsMap nodeToSubsMap;
-    WorkList nodesToBeCollapsed;
-    EdgeID edgeIndex;
 
     ConstraintEdge::ConstraintEdgeSetTy AddrCGEdgeSet;
     ConstraintEdge::ConstraintEdgeSetTy directEdgeSet;
     ConstraintEdge::ConstraintEdgeSetTy LoadCGEdgeSet;
     ConstraintEdge::ConstraintEdgeSetTy StoreCGEdgeSet;
 
+    EdgeID edgeIndex;
+
+    WorkList nodesToBeCollapsed;
+
     void buildCG();
 
     void destroy();
 
-    PAGEdge::PAGEdgeSetTy& getPAGEdgeSet(PAGEdge::PEDGEK kind){
-		return pag->getPTAEdgeSet(kind);
-    }
-
     /// Wappers used internally, not expose to Andernsen Pass
     //@{
-    inline NodeID getValueNode(const Value* value) const {
+    inline NodeID getValueNode(const llvm::Value* value) const {
         return sccRepNode(pag->getValueNode(value));
     }
 
-    inline NodeID getReturnNode(const Function* value) const {
+    inline NodeID getReturnNode(const llvm::Function* value) const {
         return pag->getReturnNode(value);
     }
 
-    inline NodeID getVarargNode(const Function* value) const {
+    inline NodeID getVarargNode(const llvm::Function* value) const {
         return pag->getVarargNode(value);
     }
     //@}
@@ -124,25 +121,6 @@ public:
         else
             assert(false && "no other kind!");
         return false;
-    }
-
-    /// Get an edge via its src and dst nodes and kind
-    inline ConstraintEdge* getEdge(ConstraintNode* src, ConstraintNode* dst, ConstraintEdge::ConstraintEdgeK kind) {
-        ConstraintEdge edge(src,dst,kind);
-        if(kind == ConstraintEdge::Copy || kind == ConstraintEdge::NormalGep || kind == ConstraintEdge::VariantGep) {
-            auto eit = directEdgeSet.find(&edge);
-            return *eit;
-        } else if(kind == ConstraintEdge::Addr) {
-            auto eit = AddrCGEdgeSet.find(&edge);
-            return *eit;
-        } else if(kind == ConstraintEdge::Store) {
-            auto eit = StoreCGEdgeSet.find(&edge);
-            return *eit;
-        } else if(kind == ConstraintEdge::Load) {
-            auto eit = LoadCGEdgeSet.find(&edge);
-            return *eit;
-        } else
-            assert(false && "no other kind!");
     }
 
     ///Add a PAG edge into Edge map
@@ -206,7 +184,8 @@ public:
             return it->second;
     }
     inline NodeBS& sccSubNodes(NodeID id) {
-        nodeToSubsMap[id].set(id);
+        if(0==nodeToSubsMap.count(id))
+            nodeToSubsMap[id].set(id);
         return nodeToSubsMap[id];
     }
     inline void setRep(NodeID node, NodeID rep) {
@@ -214,9 +193,6 @@ public:
     }
     inline void setSubs(NodeID node, NodeBS& subs) {
         nodeToSubsMap[node] |= subs;
-    }
-    inline void resetSubs(NodeID node) {
-        nodeToSubsMap.erase(node);
     }
     //@}
 
@@ -238,9 +214,12 @@ public:
         return (gepIn || gepOut);
     }
 
+    /// Parameter passing
+    void connectCaller2CalleeParams(llvm::CallSite cs, const llvm::Function *F, NodePairSet& cpySrcNodes);
+
     /// Check if a given edge is a NormalGepCGEdge with 0 offset.
     inline bool isZeroOffsettedGepCGEdge(ConstraintEdge *edge) const {
-        if (NormalGepCGEdge *normalGepCGEdge = SVFUtil::dyn_cast<NormalGepCGEdge>(edge))
+        if (NormalGepCGEdge *normalGepCGEdge = llvm::dyn_cast<NormalGepCGEdge>(edge))
             if (0 == normalGepCGEdge->getLocationSet().getOffset())
                 return true;
         return false;
@@ -317,7 +296,7 @@ public:
     //@}
 
     /// Dump graph into dot file
-    void dump(std::string name);
+    void dump();
     /// Print CG into terminal
     void print();
 };

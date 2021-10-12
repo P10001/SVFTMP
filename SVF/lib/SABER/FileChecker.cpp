@@ -28,26 +28,28 @@
  */
 
 #include "SABER/FileChecker.h"
-#include "Util/SVFUtil.h"
+#include "Util/AnalysisUtil.h"
+#include <llvm/Support/CommandLine.h>
 
-using namespace SVFUtil;
+using namespace llvm;
+using namespace analysisUtil;
 
 char FileChecker::ID = 0;
 
-static llvm::RegisterPass<FileChecker> FILECHECKER("file-checker",
+static RegisterPass<FileChecker> FILECHECKER("file-checker",
         "File Open/Close Checker");
 
 
 
 void FileChecker::reportNeverClose(const SVFGNode* src) {
     CallSite cs = getSrcCSID(src);
-    SVFUtil::errs() << bugMsg1("\t FileNeverClose :") <<  " file open location at : ("
+    errs() << bugMsg1("\t FileNeverClose :") <<  " file open location at : ("
            << getSourceLoc(cs.getInstruction()) << ")\n";
 }
 
 void FileChecker::reportPartialClose(const SVFGNode* src) {
     CallSite cs = getSrcCSID(src);
-    SVFUtil::errs() << bugMsg2("\t PartialFileClose :") <<  " file open location at : ("
+    errs() << bugMsg2("\t PartialFileClose :") <<  " file open location at : ("
            << getSourceLoc(cs.getInstruction()) << ")\n";
 }
 
@@ -58,7 +60,7 @@ void FileChecker::reportBug(ProgSlice* slice) {
     }
     else if (isAllPathReachable() == false && isSomePathReachable() == true) {
         reportPartialClose(slice->getSource());
-        SVFUtil::errs() << "\t\t conditional file close path: \n" << slice->evalFinalCond() << "\n";
+        errs() << "\t\t conditional file close path: \n" << slice->evalFinalCond() << "\n";
         slice->annotatePaths();
     }
 

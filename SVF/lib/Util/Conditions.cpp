@@ -29,10 +29,13 @@
  */
 
 #include "Util/Conditions.h"
-#include "Util/SVFUtil.h"
+#include "Util/AnalysisUtil.h"
+#include <llvm/Support/CommandLine.h>
 
-static llvm::cl::opt<unsigned> maxBddSize("maxbddsize",  llvm::cl::init(100000),
-                                    llvm::cl::desc("Maximum context limit for DDA"));
+using namespace llvm;
+
+static cl::opt<unsigned> maxBddSize("maxbddsize",  cl::init(100000),
+                                    cl::desc("Maximum context limit for DDA"));
 
 /// Operations on conditions.
 //@{
@@ -47,7 +50,7 @@ DdNode* BddCondManager::AND(DdNode* lhs, DdNode* rhs) {
     else {
         DdNode* tmp = Cudd_bddAndLimit(m_bdd_mgr, lhs, rhs, maxBddSize);
         if(tmp==NULL) {
-            SVFUtil::wrnMsg("exceeds max bdd size \n");
+            analysisUtil::wrnMsg("exceeds max bdd size \n");
             ///drop the rhs condition
             return lhs;
         }
@@ -71,7 +74,7 @@ DdNode* BddCondManager::OR(DdNode* lhs, DdNode* rhs) {
     else {
         DdNode* tmp = Cudd_bddOrLimit(m_bdd_mgr, lhs, rhs, maxBddSize);
         if(tmp==NULL) {
-            SVFUtil::wrnMsg("exceeds max bdd size \n");
+            analysisUtil::wrnMsg("exceeds max bdd size \n");
             /// drop the two conditions here
             return getTrueCond();
         }
@@ -128,7 +131,7 @@ void BddCondManager::BddSupport(DdNode * f, NodeBS &support) const {
 /*!
  * Dump BDD
  */
-void BddCondManager::dump(DdNode* lhs, raw_ostream & O) {
+void BddCondManager::dump(DdNode* lhs, llvm::raw_ostream & O) {
     if (lhs == getTrueCond())
         O << "T";
     else {

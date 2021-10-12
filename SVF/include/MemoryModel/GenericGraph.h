@@ -31,6 +31,9 @@
 #define GENERICGRAPH_H_
 
 #include "Util/BasicTypes.h"
+#include <llvm/ADT/GraphTraits.h>
+#include <llvm/ADT/STLExtras.h>			// for mapped_iter
+
 
 /*!
  * Generic edge on the graph as base class
@@ -43,8 +46,8 @@ public:
     typedef NodeTy NodeType;
     /// Edge Flag
     /// Edge format as follows (from lowest bit):
-    ///	(1) 0-7 bits encode an edge kind (allow maximum 16 kinds)
-    /// (2) 8-63 bits encode a callsite instruction
+    ///	(1) 0-3 bits encode an edge kind (allow maximum 16 kinds)
+    /// (2) 4-63 bits encode a callsite instruction
     typedef u64_t GEdgeFlag;
     typedef s32_t GEdgeKind;
 private:
@@ -102,7 +105,7 @@ public:
     //@}
 
 protected:
-    static constexpr unsigned char EdgeKindMaskBits = 8;  ///< We use the lower 8 bits to denote edge kind
+    static constexpr unsigned char EdgeKindMaskBits = 4;  ///< We use the lower 4 bits to denote edge kind
     static constexpr u64_t EdgeKindMask = (~0ULL) >> (64 - EdgeKindMaskBits);
 };
 
@@ -257,14 +260,14 @@ public:
 
     /// Find incoming and outgoing edges
     //@{
-    inline EdgeType* hasIncomingEdge(EdgeType* edge) const {
+    inline EdgeType* hasIncomingEdge(EdgeType* edge) {
         const_iterator it = InEdges.find(edge);
         if (it != InEdges.end())
             return *it;
         else
             return NULL;
     }
-    inline EdgeType* hasOutgoingEdge(EdgeType* edge) const {
+    inline EdgeType* hasOutgoingEdge(EdgeType* edge) {
         const_iterator it = OutEdges.find(edge);
         if (it != OutEdges.end())
             return *it;
@@ -356,10 +359,10 @@ public:
     }
 
     /// Get total number of node/edge
-    inline u32_t getTotalNodeNum() const {
+    inline Size_t getTotalNodeNum() const {
         return nodeNum;
     }
-    inline u32_t getTotalEdgeNum() const {
+    inline Size_t getTotalEdgeNum() const {
         return edgeNum;
     }
     /// Increase number of node/edge
@@ -374,8 +377,8 @@ protected:
     IDToNodeMapTy IDToNodeMap; ///< node map
 
 public:
-    u32_t edgeNum;		///< total num of node
-    u32_t nodeNum;		///< total num of edge
+    Size_t edgeNum;		///< total num of node
+    Size_t nodeNum;		///< total num of edge
 };
 
 

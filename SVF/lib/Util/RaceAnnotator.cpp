@@ -7,6 +7,9 @@
 
 #include "Util/RaceAnnotator.h"
 #include <sstream>
+#include <llvm/Support/CommandLine.h>	// for llvm command line options
+
+using namespace llvm;
 
 void RaceAnnotator::annotateDRCheck(Instruction* inst) {
     std::string str;
@@ -14,9 +17,9 @@ void RaceAnnotator::annotateDRCheck(Instruction* inst) {
     rawstr << DR_CHECK;
 
     /// memcpy and memset is not annotated
-    if (StoreInst* st = SVFUtil::dyn_cast<StoreInst>(inst)) {
+    if (StoreInst* st = dyn_cast<StoreInst>(inst)) {
         addMDTag(inst, st->getPointerOperand(), rawstr.str());
-    } else if (LoadInst* ld = SVFUtil::dyn_cast<LoadInst>(inst)) {
+    } else if (LoadInst* ld = dyn_cast<LoadInst>(inst)) {
         addMDTag(inst, ld->getPointerOperand(), rawstr.str());
     }
 }

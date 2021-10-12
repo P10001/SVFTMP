@@ -33,32 +33,29 @@
  */
 
 
-#include "Util/SVFUtil.h"
 #include "Util/SVFModule.h"
 #include "MemoryModel/PointerAnalysis.h"
 #include "WPA/WPAPass.h"
 #include "WPA/Andersen.h"
-#include "WPA/AndersenSFR.h"
 #include "WPA/FlowSensitive.h"
 #include "WPA/TypeAnalysis.h"
+#include <llvm/Support/CommandLine.h>
+
+using namespace llvm;
 
 char WPAPass::ID = 0;
 
-static llvm::RegisterPass<WPAPass> WHOLEPROGRAMPA("wpa",
+static RegisterPass<WPAPass> WHOLEPROGRAMPA("wpa",
         "Whole Program Pointer Analysis Pass");
 
 /// register this into alias analysis group
 ///static RegisterAnalysisGroup<AliasAnalysis> AA_GROUP(WHOLEPROGRAMPA);
 
-static llvm::cl::bits<PointerAnalysis::PTATY> PASelected(llvm::cl::desc("Select pointer analysis"),
-		llvm::cl::values(
+static cl::bits<PointerAnalysis::PTATY> PASelected(cl::desc("Select pointer analysis"),
+        cl::values(
             clEnumValN(PointerAnalysis::Andersen_WPA, "nander", "Standard inclusion-based analysis"),
             clEnumValN(PointerAnalysis::AndersenLCD_WPA, "lander", "Lazy cycle detection inclusion-based analysis"),
-            clEnumValN(PointerAnalysis::AndersenHCD_WPA, "hander", "Hybrid cycle detection inclusion-based analysis"),
-            clEnumValN(PointerAnalysis::AndersenHLCD_WPA, "hlander", "Hybrid lazy cycle detection inclusion-based analysis"),
-            clEnumValN(PointerAnalysis::AndersenSCD_WPA, "sander", "Selective cycle detection inclusion-based analysis"),
-            clEnumValN(PointerAnalysis::AndersenSFR_WPA, "sfrander", "Stride-based field representation includion-based analysis"),
-            clEnumValN(PointerAnalysis::AndersenWaveDiff_WPA, "wander", "Wave propagation inclusion-based analysis"),
+            clEnumValN(PointerAnalysis::AndersenWave_WPA, "wander", "Wave propagation inclusion-based analysis"),
             clEnumValN(PointerAnalysis::AndersenWaveDiff_WPA, "ander", "Diff wave propagation inclusion-based analysis"),
             clEnumValN(PointerAnalysis::AndersenWaveDiffWithType_WPA, "andertype", "Diff wave propagation with type inclusion-based analysis"),
             clEnumValN(PointerAnalysis::FSSPARSE_WPA, "fspta", "Sparse flow sensitive pointer analysis"),
@@ -66,18 +63,14 @@ static llvm::cl::bits<PointerAnalysis::PTATY> PASelected(llvm::cl::desc("Select 
         ));
 
 
-static llvm::cl::bits<WPAPass::AliasCheckRule> AliasRule(llvm::cl::desc("Select alias check rule"),
-		llvm::cl::values(
+static cl::bits<WPAPass::AliasCheckRule> AliasRule(cl::desc("Select alias check rule"),
+        cl::values(
             clEnumValN(WPAPass::Conservative, "conservative", "return MayAlias if any pta says alias"),
             clEnumValN(WPAPass::Veto, "veto", "return NoAlias if any pta says no alias")
         ));
 
-static llvm::cl::opt<bool> anderSVFG("svfg", llvm::cl::init(false),
-                        llvm::cl::desc("Generate SVFG after Andersen's Analysis"));
-
-static llvm::cl::opt<bool> printAliases("print-aliases", llvm::cl::init(false),
-                        llvm::cl::desc("Print results for all pair aliases"));
-
+cl::opt<bool> anderSVFG("svfg", cl::init(false),
+                        cl::desc("Generate SVFG after Andersen's Analysis"));
 
 /*!
  * Destructor
@@ -100,7 +93,6 @@ void WPAPass::runOnModule(SVFModule svfModule) {
         if (PASelected.isSet(i))
             runPointerAnalysis(svfModule, i);
     }
-    assert(!ptaVector.empty() && "No pointer analysis is specified.\n");
 }
 
 
@@ -111,85 +103,51 @@ void WPAPass::runPointerAnalysis(SVFModule svfModule, u32_t kind)
 {
     /// Initialize pointer analysis.
     switch (kind) {
-        case PointerAnalysis::Andersen_WPA:
-            _pta = new Andersen();
-            break;
-        case PointerAnalysis::AndersenLCD_WPA:
-            _pta = new AndersenLCD();
-            break;
-        case PointerAnalysis::AndersenHCD_WPA:
-            _pta = new AndersenHCD();
-            break;
-        case PointerAnalysis::AndersenHLCD_WPA:
-            _pta = new AndersenHLCD();
-            break;
-        case PointerAnalysis::AndersenSCD_WPA:
-            _pta = new AndersenSCD();
-            break;
-        case PointerAnalysis::AndersenSFR_WPA:
-            _pta = new AndersenSFR();
-            break;
-        case PointerAnalysis::AndersenWaveDiff_WPA:
-            _pta = new AndersenWaveDiff();
-            break;
-        case PointerAnalysis::AndersenWaveDiffWithType_WPA:
-            _pta = new AndersenWaveDiffWithType();
-            break;
-        case PointerAnalysis::FSSPARSE_WPA:
-            _pta = new FlowSensitive();
-            break;
-        case PointerAnalysis::TypeCPP_WPA:
-            _pta = new TypeAnalysis();
-            break;
-        default:
-            assert(false && "This pointer analysis has not been implemented yet.\n");
-            return;
+    case PointerAnalysis::Andersen_WPA:
+        _pta = new Andersen();
+        break;
+    case PointerAnalysis::AndersenLCD_WPA:
+        _pta = new AndersenLCD();
+        break;
+    case PointerAnalysis::AndersenWave_WPA:
+        _pta = new AndersenWave();
+        break;
+    case PointerAnalysis::AndersenWaveDiff_WPA:
+        _pta = new AndersenWaveDiff();
+        break;
+    case PointerAnalysis::AndersenWaveDiffWithType_WPA:
+        _pta = new AndersenWaveDiffWithType();
+        break;
+    case PointerAnalysis::FSSPARSE_WPA:
+        _pta = new FlowSensitive();
+        break;
+    case PointerAnalysis::TypeCPP_WPA:
+		_pta = new TypeAnalysis();
+		break;
+    default:
+        assert(false && "This pointer analysis has not been implemented yet.\n");
+        return;
     }
 
     ptaVector.push_back(_pta);
     _pta->analyze(svfModule);
     if (anderSVFG) {
         SVFGBuilder memSSA(true);
-        assert(SVFUtil::isa<Andersen>(_pta) && "supports only andersen for pre-computed SVFG");
-        SVFG *svfg = memSSA.buildFullSVFG((BVDataPTAImpl*)_pta);
-        /// support mod-ref queries only for -ander
-        if (PASelected.isSet(PointerAnalysis::AndersenWaveDiff_WPA))
-            _svfg = svfg;
+        assert(isa<Andersen>(_pta) && "supports only andersen for pre-computed SVFG");
+        SVFG *svfg = memSSA.buildSVFG((BVDataPTAImpl*)_pta);
         svfg->dump("ander_svfg");
     }
-
-	if (printAliases)
-		PrintAliasPairs(_pta);
 }
 
-void WPAPass::PrintAliasPairs(PointerAnalysis* pta) {
-	PAG* pag = pta->getPAG();
-	for (PAG::iterator lit = pag->begin(), elit = pag->end(); lit != elit; ++lit) {
-		PAGNode* node1 = lit->second;
-		PAGNode* node2 = node1;
-		for (PAG::iterator rit = lit, erit = pag->end(); rit != erit; ++rit) {
-			node2 = rit->second;
-			if(node1==node2)
-				continue;
-			const Function* fun1 = node1->getFunction();
-			const Function* fun2 = node2->getFunction();
-			AliasResult result = pta->alias(node1->getId(), node2->getId());
-			SVFUtil::outs()	<< (result == AliasResult::NoAlias ? "NoAlias" : "MayAlias")
-					<< " var" << node1->getId() << "[" << node1->getValueName()
-					<< "@" << (fun1==NULL?"":fun1->getName()) << "] --"
-					<< " var" << node2->getId() << "[" << node2->getValueName()
-					<< "@" << (fun2==NULL?"":fun2->getName()) << "]\n";
-		}
-	}
-}
+
 
 /*!
  * Return alias results based on our points-to/alias analysis
  * TODO: Need to handle PartialAlias and MustAlias here.
  */
-AliasResult WPAPass::alias(const Value* V1, const Value* V2) {
+llvm::AliasResult WPAPass::alias(const Value* V1, const Value* V2) {
 
-    AliasResult result = llvm::MayAlias;
+    llvm::AliasResult result = MayAlias;
 
     PAG* pag = _pta->getPAG();
 
@@ -202,49 +160,25 @@ AliasResult WPAPass::alias(const Value* V1, const Value* V2) {
         /// Veto is used by default
         if (AliasRule.getBits() == 0 || AliasRule.isSet(Veto)) {
             /// Return NoAlias if any PTA gives NoAlias result
-            result = llvm::MayAlias;
+            result = MayAlias;
 
             for (PTAVector::const_iterator it = ptaVector.begin(), eit = ptaVector.end();
                     it != eit; ++it) {
-                if ((*it)->alias(V1, V2) == llvm::NoAlias)
-                    result = llvm::NoAlias;
+                if ((*it)->alias(V1, V2) == NoAlias)
+                    result = NoAlias;
             }
         }
         else if (AliasRule.isSet(Conservative)) {
             /// Return MayAlias if any PTA gives MayAlias result
-            result = llvm::NoAlias;
+            result = NoAlias;
 
             for (PTAVector::const_iterator it = ptaVector.begin(), eit = ptaVector.end();
                     it != eit; ++it) {
-                if ((*it)->alias(V1, V2) == llvm::MayAlias)
-                    result = llvm::MayAlias;
+                if ((*it)->alias(V1, V2) == MayAlias)
+                    result = MayAlias;
             }
         }
     }
 
     return result;
-}
-
-/*!
- * Return mod-ref result of a CallInst
- */
-ModRefInfo WPAPass::getModRefInfo(const CallInst* callInst) {
-    assert(PASelected.isSet(PointerAnalysis::AndersenWaveDiff_WPA) && anderSVFG && "mod-ref query is only support with -ander and -svfg turned on");
-    return _svfg->getMSSA()->getMRGenerator()->getModRefInfo(SVFUtil::getLLVMCallSite(callInst));
-}
-
-/*!
- * Return mod-ref results of a CallInst to a specific memory location
- */
-ModRefInfo WPAPass::getModRefInfo(const CallInst* callInst, const Value* V) {
-    assert(PASelected.isSet(PointerAnalysis::AndersenWaveDiff_WPA) && anderSVFG && "mod-ref query is only support with -ander and -svfg turned on");
-    return _svfg->getMSSA()->getMRGenerator()->getModRefInfo(SVFUtil::getLLVMCallSite(callInst), V);
-}
-
-/*!
- * Return mod-ref result between two CallInsts
- */
-ModRefInfo WPAPass::getModRefInfo(const CallInst* callInst1, const CallInst* callInst2) {
-    assert(PASelected.isSet(PointerAnalysis::AndersenWaveDiff_WPA) && anderSVFG && "mod-ref query is only support with -ander and -svfg turned on");
-    return _svfg->getMSSA()->getMRGenerator()->getModRefInfo(SVFUtil::getLLVMCallSite(callInst1), SVFUtil::getLLVMCallSite(callInst2));
 }

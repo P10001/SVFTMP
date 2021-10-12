@@ -33,7 +33,8 @@
 #ifndef __ExtAPI_H
 #define __ExtAPI_H
 
-#include "Util/BasicTypes.h"
+#include <llvm/ADT/StringMap.h>
+#include <llvm/IR/Function.h>
 #include <map>
 #include <set>
 #include <string>
@@ -41,7 +42,7 @@
 //------------------------------------------------------------------------------
 class ExtAPI {
 public:
-    //External Function types
+    //External llvm::Function types
     //Assume a call in the form LHS= F(arg0, arg1, arg2, arg3).
     enum extf_t {
         EFT_NOOP= 0,      //no effect on pointers
@@ -49,6 +50,8 @@ public:
         EFT_REALLOC,      //like L_A0 if arg0 is a non-null ptr, else ALLOC
         EFT_FREE,      	//free memory arg0 and all pointers passing into free function
         EFT_NOSTRUCT_ALLOC, //like ALLOC but only allocates non-struct data
+        EFT_POOL_ALLOC, // accepts a pointer to a pool, size of memory to allocate from that pool
+                        //returns a pointer to the object on that pool
         EFT_STAT,         //retval points to an unknown static var X
         EFT_STAT2,        //ret -> X -> Y (X, Y - external static vars)
         EFT_L_A0,         //copies arg0, arg1, or arg2 into LHS
@@ -83,11 +86,11 @@ public:
     };
 private:
 
-    //Each Function name is mapped to its extf_t
+    //Each llvm::Function name is mapped to its extf_t
     //  (hash_map and map are much slower).
     llvm::StringMap<extf_t> info;
-    //A cache of is_ext results for all Function*'s (hash_map is fastest).
-    std::map<const Function*, bool> isext_cache;
+    //A cache of is_ext results for all llvm::Function*'s (hash_map is fastest).
+    std::map<const llvm::Function*, bool> isext_cache;
 
     void init();                          //fill in the map (see ExtAPI.cpp)
 
@@ -110,40 +113,40 @@ public:
     }
 
     //Return the extf_t of (F).
-    extf_t get_type(const Function *F) const {
+    extf_t get_type(const llvm::Function *F) const {
         assert(F);
         std::string funName = F->getName().str();
         if(F->isIntrinsic()) {
             funName = "llvm." + F->getName().split('.').second.split('.').first.str();
         }
         llvm::StringMap<extf_t>::const_iterator it= info.find(funName);
-        if(it == info.end() || !F->isDeclaration())
+        if(it == info.end() || (!F->isDeclaration() && it->second != EFT_POOL_ALLOC))
             return EFT_OTHER;
         else
             return it->second;
     }
 
     //Does (F) have a static var X (unavailable to us) that its return points to?
-    bool has_static(const Function *F) const {
+    bool has_static(const llvm::Function *F) const {
         extf_t t= get_type(F);
         return t==EFT_STAT || t==EFT_STAT2;
     }
     //Assuming hasStatic(F), does (F) have a second static Y where X -> Y?
-    bool has_static2(const Function *F) const {
+    bool has_static2(const llvm::Function *F) const {
         return get_type(F) == EFT_STAT2;
     }
     //Does (F) allocate a new object and return it?
-    bool is_alloc(const Function *F) const {
+    bool is_alloc(const llvm::Function *F) const {
         extf_t t= get_type(F);
-        return t==EFT_ALLOC || t==EFT_NOSTRUCT_ALLOC;
+        return t==EFT_ALLOC || t==EFT_NOSTRUCT_ALLOC || t == EFT_POOL_ALLOC;
     }
     //Does (F) allocate a new object and assign it to one of its arguments?
-    bool is_arg_alloc(const Function *F) const {
+    bool is_arg_alloc(const llvm::Function *F) const {
         extf_t t= get_type(F);
         return t>=EFT_A0R_NEW && t<=EFT_A11R_NEW;
     }
     //Get the position of argument which holds the new object
-    int get_alloc_arg_pos(const Function *F) const {
+    int get_alloc_arg_pos(const llvm::Function *F) const {
         extf_t t= get_type(F);
         switch(t) {
         case EFT_A0R_NEW:
@@ -162,30 +165,45 @@ public:
         }
     }
     //Does (F) allocate only non-struct objects?
-    bool no_struct_alloc(const Function *F) const {
+    bool no_struct_alloc(const llvm::Function *F) const {
         return get_type(F) == EFT_NOSTRUCT_ALLOC;
     }
     //Does (F) not free/release any memory?
-    bool is_dealloc(const Function *F) const {
+    bool is_dealloc(const llvm::Function *F) const {
         extf_t t= get_type(F);
         return t == EFT_FREE;
     }
     //Does (F) not do anything with the known pointers?
-    bool is_noop(const Function *F) const {
+    bool is_noop(const llvm::Function *F) const {
         extf_t t= get_type(F);
         return t == EFT_NOOP || t == EFT_FREE;
     }
     //Does (F) reallocate a new object?
-    bool is_realloc(const Function *F) const {
+    bool is_realloc(const llvm::Function *F) const {
         extf_t t= get_type(F);
         return t==EFT_REALLOC;
     }
+
+    bool is_treat_as_ext(const llvm::Function *F) {
+        llvm::StringMap<extf_t>::const_iterator it= info.find(F->getName());
+        if(it == info.end())
+            return false;
+        else {
+            extf_t t = it->second;
+            if (t == EFT_POOL_ALLOC)
+                return true;
+            else
+                return false;
+        }
+        return false;
+    }
+
     //Should (F) be considered "external" (either not defined in the program
     //  or a user-defined version of a known alloc or no-op)?
-    bool is_ext(const Function *F) {
+    bool is_ext(const llvm::Function *F) {
         assert(F);
         //Check the cache first; everything below is slower.
-        std::map<const Function*, bool>::iterator i_iec= isext_cache.find(F);
+        std::map<const llvm::Function*, bool>::iterator i_iec= isext_cache.find(F);
         if(i_iec != isext_cache.end())
             return i_iec->second;
 
@@ -194,7 +212,10 @@ public:
             res= 1;
         } else {
             extf_t t= get_type(F);
-            res= t==EFT_ALLOC || t==EFT_REALLOC || t==EFT_NOSTRUCT_ALLOC
+            res= t==EFT_ALLOC || t==EFT_REALLOC || t==EFT_NOSTRUCT_ALLOC || t == EFT_POOL_ALLOC
+                 /* treat all pool alloc calls as external, even if they're in
+                  * the library being analyzed 
+                  */
                  || t==EFT_NOOP || t==EFT_FREE;
         }
         isext_cache[F]= res;
